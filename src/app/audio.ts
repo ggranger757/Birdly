@@ -116,6 +116,11 @@ export async function playClip(name: Clip, opts: { duck?: boolean; vol?: number 
     const mg = musicBus.gain;
     mg.cancelScheduledValues(now); mg.setValueAtTime(mg.value, now); mg.linearRampToValueAtTime(0.0001, now + 0.15);
     mg.setValueAtTime(0.0001, duckUntil); mg.linearRampToValueAtTime(0.32, duckUntil + 1.2);
+    if (songGain && songEl && !songEl.paused) {
+      const sg = songGain.gain;
+      sg.cancelScheduledValues(now); sg.setValueAtTime(sg.value, now); sg.linearRampToValueAtTime(0.06, now + 0.2);
+      sg.setValueAtTime(0.06, duckUntil); sg.linearRampToValueAtTime(SONG_VOL, duckUntil + 1.5);
+    }
   }
 }
 /** Warm the clip cache after the first user gesture so jingles start instantly. */
@@ -200,12 +205,43 @@ function play(name: string) {
 }
 
 /** Switch background theme. Silent until the first user gesture (browser autoplay rules). */
+// The main theme is a recorded song (owner-supplied) streamed through WebAudio so it can be ducked.
+const SONG_THEMES = new Set(['title', 'explore']);
+const SONG_VOL = 0.5;
+let songEl: HTMLAudioElement | null = null;
+let songGain: GainNode | null = null;
+function songStart() {
+  const c = ac(); if (!c) return;
+  if (!songEl) {
+    songEl = new Audio('music/main-theme.mp3');
+    songEl.loop = true; songEl.preload = 'auto';
+    songGain = c.createGain(); songGain.gain.value = 0;
+    try { c.createMediaElementSource(songEl).connect(songGain); } catch { /* already connected */ }
+    songGain.connect(c.destination);
+  }
+  const g = songGain!.gain; g.cancelScheduledValues(c.currentTime); g.setValueAtTime(g.value, c.currentTime); g.linearRampToValueAtTime(SONG_VOL, c.currentTime + 0.8);
+  songEl.play().catch(() => {});
+}
+function songStop() {
+  if (!songEl || !songGain || !ctx) return;
+  const g = songGain.gain; g.cancelScheduledValues(ctx.currentTime); g.setValueAtTime(g.value, ctx.currentTime); g.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+  const el = songEl; setTimeout(() => { if (!SONG_THEMES.has(current ?? '')) el.pause(); }, 600); // pause keeps the position for next time
+}
+
 export function music(name: keyof typeof T | null) {
   if (name === current) return;
+  const prev = current;
   current = name;
   if (timer) { clearInterval(timer); timer = null; }
+  const song = !!name && SONG_THEMES.has(name);
+  if (!song) songStop();
+  if (!name || !getState().settings.music || !unlocked) { if (song) songStop(); return; }
+  if (song) {
+    if (ctx && musicBus) { musicBus.disconnect(); musicBus = ctx.createGain(); musicBus.gain.value = 0.32; musicBus.connect(ctx.destination); }
+    if (!(prev && SONG_THEMES.has(prev) && songEl && !songEl.paused)) songStart();
+    return;
+  }
   if (musicBus && ctx) { const g = musicBus.gain; g.cancelScheduledValues(ctx.currentTime); g.setValueAtTime(0, ctx.currentTime); g.linearRampToValueAtTime(0.32, ctx.currentTime + 0.4); }
-  if (!name || !getState().settings.music || !unlocked) return;
   // fresh bus so already-scheduled notes from the old theme are cut
   if (ctx && musicBus) { musicBus.disconnect(); musicBus = ctx.createGain(); musicBus.gain.value = 0.32; musicBus.connect(ctx.destination); }
   play(name);
@@ -226,3 +262,23 @@ if (typeof window !== 'undefined') {
   const u = () => { unlockAudio(); window.removeEventListener('pointerdown', u); window.removeEventListener('keydown', u); };
   window.addEventListener('pointerdown', u); window.addEventListener('keydown', u);
 }
+
+// ─── never play while the app isn't on screen ───
+// Switching apps, locking the phone or closing the tab pauses ALL sound; it resumes when the player returns.
+function goQuiet() {
+  try { songEl?.pause(); } catch { /* ignore */ }
+  try { if (ctx && ctx.state === 'running') ctx.suspend(); } catch { /* ignore */ }
+}
+function wakeUp() {
+  if (!unlocked || !ctx) return;
+  ctx.resume().catch(() => {});
+  if (current && SONG_THEMES.has(current) && getState().settings.music && songEl) songEl.play().catch(() => {});
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? goQuiet() : wakeUp()));
+  window.addEventListener('pagehide', goQuiet);
+  window.addEventListener('blur', () => { if (document.visibilityState === 'hidden') goQuiet(); });
+  window.addEventListener('pageshow', () => { if (document.visibilityState === 'visible') wakeUp(); });
+}
+// read-only audio status for the debug panel and automated checks
+if (typeof window !== 'undefined') (window as any).__audioState = () => ({ songPlaying: !!songEl && !songEl.paused, context: ctx?.state ?? 'none', theme: current });

@@ -5,7 +5,7 @@ import { paintSceneThumb } from '../../render/diorama';
 import { Sprite, useReducedMotion } from '../components';
 import { Dialog, Types, BirdThumb, Capsule } from '../game';
 import { sfx, music } from '../../app/audio';
-import { Professor } from '../Professor';
+import { Professor, Druid } from '../Characters';
 import { RegionPicker } from './RegionPicker';
 import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus } from '../../data/provider';
@@ -32,7 +32,6 @@ export function Boot({ onDone }: { onDone: () => void }) {
   );
 }
 
-const PROF = SPECIES_BY_ID.grhowl;
 
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const [step, setStep] = useState<'intro' | 'name' | 'region' | 'partner' | 'outro'>('intro');
@@ -52,8 +51,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
         <SceneBackdrop />
         {prof}
-        <Dialog speaker="Professor Rowan" lines={[
-          'Welcome, traveller, to the world of BIRDS! I am Rowan, druid of the old woods.',
+        <Dialog speaker="Professor Merlin" lines={[
+          'Kee-kee! Welcome to the world of BIRDS! I am Professor Merlin, a falcon of the old woods.',
           'Real wild birds live all around you — in parks, on rooftops, by the water.',
           'Snap a photo of one and it is discovered: it joins your BirdDex as a pixel companion, while the real bird flies on.',
           'Every bird you discover is drawn from YOUR photo. No two explorers have the same birds.',
@@ -78,7 +77,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   if (step === 'region') {
     return (
       <div className="screen">
-        <Dialog speaker="Professor Rowan" lines={[`${name.trim() || 'Birder'}! Where do you live? Every place has its own birds.`]} />
+        <Dialog speaker="Professor Merlin" lines={[`${name.trim() || 'Birder'}! Where do you live? Every place has its own birds.`]} />
         <div className="mt16">
           <RegionPicker value={getState().onboarded ? region : undefined} onPick={(code) => { setRegion(code); setStep('partner'); }} />
         </div>
@@ -89,12 +88,22 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   if (step === 'partner') return <PartnerPick region={region} onDone={() => setStep('outro')} />;
 
   const r = getRegion(region);
+  return <Outro r={r} region={region} onFinish={onFinish} />;
+}
+
+function Outro({ r, region, onFinish }: { r: ReturnType<typeof getRegion>; region: string; onFinish: () => void }) {
+  const [druidAct, setDruidAct] = useState<'idle' | 'cast'>('idle');
+  const [druidKey, setDruidKey] = useState(0);
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
       <SceneBackdrop />
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}><Capsule size={72} /></div>
-      <Dialog speaker="Professor Rowan" lines={[
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 18, marginBottom: 20 }}>
+        <Professor height={96} />
+        <Druid scale={1} act={druidAct} actKey={druidKey} />
+      </div>
+      <Dialog speaker="Professor Merlin" onLine={(i) => { if (i === 1) { setDruidAct('cast'); setDruidKey((k) => k + 1); } }} lines={[
         `${r.flag ?? ''} ${regionLabel(region)}. Splendid birding country!`,
+        'This is Rowan, a druid of the forest. Rowan keeps the feed store and hands out quests.',
         'Here is your Snap Lens. Point your camera at a real bird and press the shutter to record it.',
         'Fill your BirdDex, earn badges, and grow your Aviary. Your quest begins now!',
       ]} onDone={() => {
@@ -119,7 +128,7 @@ function PartnerPick({ region, onDone }: { region: string; onDone: () => void })
   const [pick, setPick] = useState<Species | null>(null);
   return (
     <div className="screen">
-      <Dialog speaker="Professor Rowan" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} />
+      <Dialog speaker="Professor Merlin" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} />
       {status === 'loading' && <p className="small muted mt8">Looking up the birds of {regionLabel(region)}…</p>}
       <div className="col mt16" style={{ gap: 12 }}>
         {choices.map((sp) => (

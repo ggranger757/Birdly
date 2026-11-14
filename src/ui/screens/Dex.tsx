@@ -3,7 +3,8 @@ import { useNav } from '../nav';
 import { useGame, counts, speciesOf, logEvent } from '../../app/store';
 import { getRegion } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus } from '../../data/provider';
-import { typesOf, BirdType, TYPE_COLOR } from '../../core/rarity';
+import { typesOf, BirdType, GROUP_PLURAL, GROUP_TYPES, PLACE_TYPES } from '../../core/rarity';
+import { Segmented } from '../kit';
 import type { Sighting } from '../../core/model';
 import { Sprite, Meter, VERIFY_META, formatDate } from '../components';
 import { Types, dexNo, HpBar } from '../game';
@@ -18,7 +19,8 @@ export function Dex() {
   const st = useGame((s) => s);
   const [, force] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
-  const [type, setType] = useState<BirdType | ''>('');
+  const [group, setGroup] = useState<BirdType | ''>('');
+  const [place, setPlace] = useState<BirdType | ''>('');
   const [q, setQ] = useState('');
   useEffect(() => { logEvent('journal_open'); ensureRegion(st.region); return onProviderChange(() => force((x) => x + 1)); }, [st.region]);
   useEffect(() => { if (nav.highlight) { const t = setTimeout(() => nav.setHighlight(null), 2600); return () => clearTimeout(t); } }, [nav.highlight]);
@@ -33,13 +35,15 @@ export function Dex() {
   const have = entries.filter((e) => mine.has(e.sp.id)).length;
   const outside = [...mine.keys()].filter((id) => !entries.some((e) => e.sp.id === id));
   const pending = st.sightings.filter((s) => !counts(s));
-  const allTypes = [...new Set(entries.flatMap((e) => typesOf(e.sp)))].sort() as BirdType[];
+  const present = new Set(entries.flatMap((e) => typesOf(e.sp)));
+  const groups = GROUP_TYPES.filter((t) => present.has(t));
 
   const shown = entries.filter((e) => {
     const caught = mine.has(e.sp.id);
     if (filter === 'found' && !caught) return false;
     if (filter === 'missing' && caught) return false;
-    if (type && !typesOf(e.sp).includes(type)) return false;
+    if (group && typesOf(e.sp)[0] !== group) return false;
+    if (place && !(e.sp.habitats.includes(place === 'City' ? 'urban' : place === 'Forest' ? 'woodland' : 'water'))) return false;
     if (q && !(caught && `${e.sp.common} ${e.sp.sci}`.toLowerCase().includes(q.toLowerCase())) && !String(e.dex).includes(q)) return false;
     return true;
   });
@@ -55,12 +59,24 @@ export function Dex() {
 
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your birds or a dex number" aria-label="Search BirdDex"
         style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: '#000', border: '2px solid var(--smoke)', marginBottom: 8 }} />
-      <div className="hscroll" role="group" aria-label="Filters">
-        {(['all', 'found', 'missing'] as Filter[]).map((f) => <button key={f} className="filter" aria-pressed={filter === f} onClick={() => setFilter(f)}>{f}</button>)}
-        {allTypes.map((t) => (
-          <button key={t} className="filter" aria-pressed={type === t} onClick={() => setType(type === t ? '' : t)} style={type === t ? { background: TYPE_COLOR[t], borderColor: '#000', color: '#fff' } : undefined}>{t}</button>
-        ))}
+      <Segmented label="Show" value={filter} onChange={setFilter} options={[
+        { id: 'all', label: `All ${entries.length}` }, { id: 'found', label: `Found ${have}` }, { id: 'missing', label: `Missing ${entries.length - have}` },
+      ]} />
+      <div className="row" style={{ gap: 8 }}>
+        <label className="grow"><span className="sr-only">Bird group</span>
+          <select className="filter" style={{ width: '100%' }} value={group} onChange={(e) => setGroup(e.target.value as BirdType | '')}>
+            <option value="">All bird groups</option>
+            {groups.map((t) => <option key={t} value={t}>{GROUP_PLURAL[t]}</option>)}
+          </select>
+        </label>
+        <label className="grow"><span className="sr-only">Where they live</span>
+          <select className="filter" style={{ width: '100%' }} value={place} onChange={(e) => setPlace(e.target.value as BirdType | '')}>
+            <option value="">Anywhere</option>
+            {PLACE_TYPES.map((t) => <option key={t} value={t}>{t === 'City' ? 'City & gardens' : t === 'Forest' ? 'Parks & woods' : 'Water & shore'}</option>)}
+          </select>
+        </label>
       </div>
+      {(group || place) && <button className="link" onClick={() => { setGroup(''); setPlace(''); }}>Clear filters</button>}
 
       {pending.length > 0 && (
         <section className="panel dashed mt8" aria-label="Unidentified discoveries">

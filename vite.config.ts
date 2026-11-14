@@ -38,9 +38,15 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2,webmanifest,mp3}'],
+        globIgnores: ['**/music/**'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
         runtimeCaching: [
+          {
+            urlPattern: /\/music\/.*\.mp3$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'music', rangeRequests: true, cacheableResponse: { statuses: [200] }, expiration: { maxEntries: 4 } }
+          },
           {
             urlPattern: /^https:\/\/[abcd]\.basemaps\.cartocdn\.com\//,
             handler: 'CacheFirst',

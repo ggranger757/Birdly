@@ -95,6 +95,19 @@ export const TYPE_COLOR: Record<BirdType, string> = {
   Song: '#6FA84B', Water: '#2E6F9E', Shore: '#D9C26A', Sea: '#5AA9C9', Raptor: '#C2622F', Night: '#7B4FA8', Wood: '#8C5A2B',
   Jewel: '#C94F7C', Ground: '#7A7A3F', Tropic: '#3F7A3F', Dive: '#1F3F6E', Clever: '#5B5A7A', City: '#8A8BA3', Forest: '#24553F', Wetland: '#4A3F8F',
 };
+/** Plain-language names shown to players (the internal ids stay short). */
+export const TYPE_LABEL: Record<BirdType, string> = {
+  Song: 'Songbird', Clever: 'Crow family', Raptor: 'Bird of prey', Night: 'Owl', Water: 'Waterbird', Shore: 'Wader',
+  Sea: 'Seabird', Wood: 'Woodpecker', Jewel: 'Hummingbird', Ground: 'Ground bird', Tropic: 'Parrot', Dive: 'Kingfisher',
+  City: 'City', Forest: 'Woods', Wetland: 'Water',
+};
+export const GROUP_PLURAL: Partial<Record<BirdType, string>> = {
+  Song: 'Songbirds', Clever: 'Crows & jays', Raptor: 'Birds of prey', Night: 'Owls', Water: 'Ducks & waterbirds', Shore: 'Herons & waders',
+  Sea: 'Gulls & seabirds', Wood: 'Woodpeckers', Jewel: 'Hummingbirds', Ground: 'Ground birds', Tropic: 'Parrots', Dive: 'Kingfishers',
+};
+export const GROUP_TYPES: BirdType[] = ['Song', 'Clever', 'Raptor', 'Night', 'Water', 'Shore', 'Sea', 'Wood', 'Jewel', 'Ground', 'Tropic', 'Dive'];
+export const PLACE_TYPES: BirdType[] = ['City', 'Forest', 'Wetland'];
+
 export function typesOf(sp: Species): BirdType[] {
   const a: Record<string, BirdType> = {
     passerine: 'Song', corvid: 'Clever', raptor: 'Raptor', owl: 'Night', waterfowl: 'Water', wader: 'Shore', seabird: 'Sea',

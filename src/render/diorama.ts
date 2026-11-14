@@ -87,17 +87,6 @@ export async function paintSceneThumb(canvas: HTMLCanvasElement, biome: Habitat,
 export type PerchKind = 'perch' | 'ground' | 'water';
 export interface Perch { x: number; y: number; kind: PerchKind }
 
-export const DECOR_ITEMS: { key: string; name: string; price: number; hang?: boolean }[] = [
-  { key: 'feeder', name: 'Seed feeder', price: 60, hang: true },
-  { key: 'lantern', name: 'Paper lantern', price: 80, hang: true },
-  { key: 'nestbox', name: 'Nest box', price: 90, hang: true },
-  { key: 'bath', name: 'Bird bath', price: 70 },
-  { key: 'flowers', name: 'Sunflowers', price: 60 },
-  { key: 'bench', name: 'Bench', price: 110 },
-  { key: 'stone', name: 'Mossy stone', price: 50 },
-  { key: 'reeds', name: 'Reed clump', price: 50 },
-];
-export const DECOR_SLOTS = ['hang', 'left', 'mid', 'right'] as const;
 
 interface Layout { perches: Perch[]; gy: number; branchL?: number; branchR?: number; wire?: number; feeder?: [number, number]; post?: [number, number]; slots: Record<string, [number, number]> }
 
@@ -159,20 +148,6 @@ function paintProps(g: CanvasRenderingContext2D, L: Layout, W: number, H: number
   if (L.post) { const [x, y] = L.post; rect(g, x - 3, y, 7, H - y, dark); rect(g, x - 3, y, 7, 2, bark); rect(g, x - 2, y + 6, 1, H - y, bark); }
 }
 
-export function paintDecor(g: CanvasRenderingContext2D, key: string, x: number, y: number) {
-  switch (key) {
-    case 'feeder': rect(g, x, 0, 1, y, C('ink')); rect(g, x - 5, y, 11, 2, C('rust')); rect(g, x - 3, y + 2, 7, 9, C('ice')); rect(g, x - 2, y + 7, 5, 4, C('warbler')); rect(g, x - 6, y + 11, 13, 2, C('rust')); break;
-    case 'lantern': rect(g, x, 0, 1, y, C('ink')); rect(g, x - 4, y, 9, 12, C('oriole')); rect(g, x - 3, y + 2, 7, 8, C('sun')); rect(g, x - 4, y + 5, 9, 1, C('rust')); break;
-    case 'nestbox': rect(g, x, 0, 1, y, C('ink')); rect(g, x - 6, y, 13, 2, C('umber')); rect(g, x - 5, y + 2, 11, 14, C('bark')); disc(g, x, y + 7, 2, C('ink')); break;
-    case 'bath': rect(g, x - 2, y - 10, 5, 10, C('stone')); rect(g, x - 8, y - 13, 17, 3, C('stone')); rect(g, x - 7, y - 13, 15, 1, C('sky')); break;
-    case 'flowers': for (const dx of [-5, 0, 5]) { rect(g, x + dx, y - 16 + Math.abs(dx), 1, 16 - Math.abs(dx), C('fern')); disc(g, x + dx, y - 17 + Math.abs(dx), 2, C('sun')); rect(g, x + dx, y - 17 + Math.abs(dx), 1, 1, C('umber')); } break;
-    case 'bench': rect(g, x - 12, y - 8, 24, 2, C('bark')); rect(g, x - 12, y - 13, 24, 2, C('bark')); rect(g, x - 10, y - 6, 2, 6, C('umber')); rect(g, x + 8, y - 6, 2, 6, C('umber')); break;
-    case 'stone': disc(g, x, y - 3, 6, C('smoke')); rect(g, x - 6, y - 3, 12, 3, C('slate')); rect(g, x - 3, y - 8, 5, 2, C('moss')); break;
-    case 'reeds': for (let i = -4; i <= 4; i += 2) rect(g, x + i, y - 14 - (i & 3), 1, 14 + (i & 3), C('olive')); rect(g, x - 2, y - 18, 2, 4, C('umber')); break;
-  }
-}
-
-/** The Aviary feeder: rope, glass tube showing the seed level, and a tray birds perch on. */
 function feederGeom(W: number, H: number) {
   const x = Math.round(W * 0.64), top = Math.round(H * 0.1);
   return { x, top, tubeY: top + 4, tubeH: 26, trayY: top + 32 };
@@ -219,7 +194,7 @@ export interface Bird {
   home?: Perch; eatUntil?: number;
 }
 
-export interface DioramaOpts { frame?: boolean; decor?: Record<string, string>; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
+export interface DioramaOpts { frame?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
 
 export class Diorama {
   private ctx: CanvasRenderingContext2D;
@@ -248,10 +223,6 @@ export class Diorama {
     const n = this.imgs.length;
     paintLayers(g, this.imgs.slice(Math.max(0, n - 2)), { ...this.scene, tint: undefined }, this.W, this.H, 0, 2);
     paintProps(g, this.L, this.W, this.H, this.phase === 'night');
-    for (const [slot, key] of Object.entries(this.opts.decor ?? {})) {
-      if (slot === 'hang' && this.opts.feeder !== undefined) continue;
-      const at = this.L.slots[slot]; if (at) paintDecor(g, key, at[0], at[1]);
-    }
     if (this.opts.feeder !== undefined) paintFeeder(g, this.W, this.H, this.opts.feeder);
   }
   /** Update the feeder's fill level (0–1). */

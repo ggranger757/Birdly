@@ -1,7 +1,7 @@
 // Collector-RPG UI kit: dialogue box, cursor menu, type chips, the Snap Capsule, real-bird thumbnails.
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import type { Species } from '../data/types';
-import { typesOf, TYPE_COLOR, BirdType } from '../core/rarity';
+import { typesOf, TYPE_COLOR, TYPE_LABEL, BirdType } from '../core/rarity';
 import { sfx } from '../app/audio';
 import { useRefPhoto, reducedMotionNow } from './components';
 
@@ -63,7 +63,7 @@ export function Menu<T>({ items, render, onPick, label }: { items: T[]; render: 
 }
 
 export function TypeChip({ t }: { t: BirdType }) {
-  return <span className="type-chip" style={{ background: TYPE_COLOR[t] }}>{t}</span>;
+  return <span className="type-chip" style={{ background: TYPE_COLOR[t] }}>{TYPE_LABEL[t]}</span>;
 }
 export function Types({ sp }: { sp: Species }) {
   return <span className="row" style={{ gap: 4, display: 'inline-flex' }}>{typesOf(sp).map((t) => <TypeChip key={t} t={t} />)}</span>;

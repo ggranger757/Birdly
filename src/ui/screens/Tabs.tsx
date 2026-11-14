@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, counts, speciesOf, speciesCount, setBiome, buyDecor, placeDecor, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
+import { useGame, counts, speciesOf, speciesCount, setBiome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
 import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
 import { getRegion, regionLabel } from '../../data/geo';
 import { allKnownSpecies } from '../../data/provider';
 import { music } from '../../app/audio';
 import { Types, BirdThumb, dexNo, BadgeIcon, HpBar } from '../game';
 import { PageHeader, Segmented, Alert, FeatherChip } from '../kit';
-import { Diorama, DECOR_ITEMS, DECOR_SLOTS } from '../../render/diorama';
+import { Druid } from '../Characters';
+import { Diorama } from '../../render/diorama';
 import { sunTimes, dayPhase } from '../../core/sun';
 import { rankFor, RANKS, liveStreak, dayKey } from '../../core/xp';
 import { BADGES, TIER_FEATHERS } from '../../core/badges';
@@ -16,7 +17,9 @@ import type { Habitat } from '../../data/types';
 import { Sprite, Meter, Icon, useReducedMotion, Sheet, RarityTag } from '../components';
 import { sfx, haptic, playClip } from '../../app/audio';
 
-// ─── HABITAT (GAM-9): cozy diorama of caught birds; decor bought with Feathers ───
+// ─── AVIARY: your birds living in a scene, kept fed from the feeder ───
+const SHOP_THANKS = ['A fine choice. Your birds will sing for it.', 'Into the bag it goes! Fill that feeder.', 'The forest thanks you, friend.', 'Fresh from the old woods. Enjoy!'];
+
 export function HabitatTab() {
   useEffect(() => { music('aviary'); }, []);
   const nav = useNav();
@@ -26,8 +29,10 @@ export function HabitatTab() {
   const boxRef = useRef<HTMLDivElement>(null);
   const dio = useRef<Diorama | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const [sheet, setSheet] = useState<'box' | 'decor' | 'fill' | 'shop' | null>(null);
-  const [section, setSection] = useState<'birds' | 'feeder' | 'decor'>('birds');
+  const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | null>(null);
+  const [section, setSection] = useState<'birds' | 'feeder'>('birds');
+  const [shopCast, setShopCast] = useState(0);
+  const [shopLine, setShopLine] = useState('Seeds, berries, mealworms! Fair prices, paid in Feathers.');
   const [sceneLabel, setSceneLabel] = useState('');
   const [gift, setGift] = useState(0);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -61,7 +66,7 @@ export function HabitatTab() {
   useEffect(() => { const w = boxRef.current?.clientWidth ?? 358; setDims({ w: Math.floor(w / 2), h: Math.floor(Math.min(window.innerHeight * 0.46, 480) / 2) }); }, []);
   useEffect(() => {
     if (!dims) return;
-    const d = new Diorama(ref.current!, st.diorama.biome, phase, { decor: st.diorama.decor, reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
+    const d = new Diorama(ref.current!, st.diorama.biome, phase, { reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
     dio.current = d;
     setSceneLabel(d.scene.label);
     const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
@@ -69,7 +74,7 @@ export function HabitatTab() {
     aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3 }));
     d.start();
     return () => { d.dispose(); dio.current = null; };
-  }, [st.diorama.biome, JSON.stringify(st.diorama.decor), aviary.map((p) => p.id).join(), reduced, dims]);
+  }, [st.diorama.biome, aviary.map((p) => p.id).join(), reduced, dims]);
   useEffect(() => { dio.current?.setFeeder(fill); }, [fill]);
 
   const hungry = aviary.filter((x) => hpNow(x) < 30).length;
@@ -93,7 +98,6 @@ export function HabitatTab() {
       <Segmented label="Aviary sections" value={section} onChange={setSection} options={[
         { id: 'birds', label: 'Birds', badge: hungry || undefined },
         { id: 'feeder', label: 'Feeder', badge: st.feeder.level < 20 },
-        { id: 'decor', label: 'Decor' },
       ]} />
 
       {section === 'birds' && (
@@ -115,6 +119,12 @@ export function HabitatTab() {
           })}
           <button className="btn block" onClick={() => setSheet('box')}>Bird Box · {box.length} resting</button>
           <p className="small muted">Aviary birds eat from the feeder and earn you Feathers. Birds in the Bird Box rest and don't get hungry.</p>
+          <div className="section-title"><span>Scene</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{sceneLabel}</span></div>
+          <div className="hscroll">
+            {biomes.map(({ b, label, need }) => (
+              <button key={b} className="filter" aria-pressed={st.diorama.biome === b} disabled={species < need} onClick={() => setBiome(b)}>{label}{species < need ? ` · ${need} species` : ''}</button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -147,19 +157,6 @@ export function HabitatTab() {
         </section>
       )}
 
-      {section === 'decor' && (
-        <section aria-label="Decor and scene">
-          <div className="section-title" style={{ marginTop: 0 }}><span>Scene</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{sceneLabel}</span></div>
-          <div className="hscroll">
-            {biomes.map(({ b, label, need }) => (
-              <button key={b} className="filter" aria-pressed={st.diorama.biome === b} disabled={species < need} onClick={() => setBiome(b)}>{label}{species < need ? ` · ${need} sp.` : ''}</button>
-            ))}
-          </div>
-          <div className="section-title"><span>Decor</span><span>{Object.keys(st.diorama.decor).length}/{DECOR_SLOTS.length - 1}</span></div>
-          <button className="btn block" onClick={() => setSheet('decor')} disabled={species < 25}>Decorate</button>
-          {species < 25 && <p className="small muted">Decor opens at 25 species ({species} so far). Other scenes open at 10.</p>}
-        </section>
-      )}
 
       {sheet === 'fill' && (
         <Sheet onClose={() => setSheet(null)} label="Fill the feeder">
@@ -182,12 +179,16 @@ export function HabitatTab() {
       )}
       {sheet === 'shop' && (
         <Sheet onClose={() => setSheet(null)} label="Food shop">
-          <div className="row between mb8"><h3>Food shop</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
+          <div className="row between mb8"><h3>Rowan's Feed Store</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
+          <div className="npc mb8">
+            <Druid act={shopCast ? 'cast' : 'idle'} actKey={shopCast} />
+            <div className="bubble"><b>Rowan</b>{shopLine}</div>
+          </div>
           {(Object.keys(FOODS) as Food[]).map((f) => (
             <div key={f} className="srow">
               <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
               <span className="grow"><span className="name">{FOODS[f].name}</span> <span className="small muted">· have {st.items[f]}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
-              <button className="btn small primary" disabled={st.feathers < FOODS[f].price} onClick={() => { if (buyFood(f)) { playClip('buy'); nav.toast(`Bought ${FOODS[f].name}`); } else sfx.error(); }}>
+              <button className="btn small primary" disabled={st.feathers < FOODS[f].price} onClick={() => { if (buyFood(f)) { playClip('buy'); setShopCast((k) => k + 1); setShopLine(SHOP_THANKS[(shopCast + 1) % SHOP_THANKS.length]); nav.toast(`Bought ${FOODS[f].name}`); } else { sfx.error(); setShopLine('Not enough Feathers, friend. Go and find some birds!'); } }}>
                 {FOODS[f].price} <Icon name="feather" size={10} color="var(--accent-ink)" />
               </button>
             </div>
@@ -207,24 +208,6 @@ export function HabitatTab() {
                 <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={1} mode="static" />
                 <span className="grow"><span className="name">{speciesOf(s).common}</span><br /><span style={{ display: 'block', width: 120 }}><HpBar hp={hpNow(s)} compact /></span></span>
                 <button className="btn small" onClick={() => { if (!toggleHabitatBird(s.id)) nav.toast(`The Aviary holds ${AVIARY_MAX} birds. Move one to the Bird Box first.`); }}>{here ? 'To box' : 'To aviary'}</button>
-              </div>
-            );
-          })}
-        </Sheet>
-      )}
-      {sheet === 'decor' && (
-        <Sheet onClose={() => setSheet(null)} label="Decorate">
-          <h3 className="mb8">Decor · {st.feathers} Feathers</h3>
-          {DECOR_ITEMS.map((d) => {
-            const owned = st.ownedDecor.includes(d.key);
-            const slot = Object.entries(st.diorama.decor).find(([, k]) => k === d.key)?.[0];
-            const slots = d.hang ? ['hang'] : ['left', 'mid', 'right'];
-            return (
-              <div key={d.key} className="srow">
-                <span className="grow"><span className="name">{d.name}</span><br /><span className="small muted">{owned ? (slot ? `Placed · ${slot}` : 'Owned') : `${d.price} Feathers`}</span></span>
-                {!owned ? <button className="btn small" disabled={st.feathers < d.price} onClick={() => { if (buyDecor(d.key, d.price)) { playClip('buy'); placeDecor(slots.find((x) => !st.diorama.decor[x]) ?? slots[0], d.key); } }}>Buy</button>
-                  : slot ? <button className="btn small ghost" onClick={() => placeDecor(slot, null)}>Store</button>
-                    : <button className="btn small" onClick={() => placeDecor(slots.find((x) => !st.diorama.decor[x]) ?? slots[0], d.key)}>Place</button>}
               </div>
             );
           })}
@@ -257,7 +240,8 @@ export function YouTab() {
     ...(st.challenges.seasonal ? [{ slot: st.challenges.seasonal, kind: 'Seasonal' }] : []),
   ];
   const claimable = slots.filter(({ slot }) => !slot.claimed && challengeProgress(st, slot, now).done).length;
-  const [section, setSection] = useState<'quests' | 'badges' | 'life'>(claimable ? 'quests' : 'quests');
+  const [section, setSection] = useState<'quests' | 'badges' | 'life'>('quests');
+  const [questCast, setQuestCast] = useState(0);
   const cats = ['Firsts', 'Taxonomy', 'Place', 'Craft', 'Care', 'Time', 'Dedication'] as const;
   const tierColor = { bronze: 'var(--rust)', silver: 'var(--stone)', gold: 'var(--sun)', platinum: 'var(--ice)' };
   return (
@@ -291,6 +275,10 @@ export function YouTab() {
 
       {section === 'quests' && (
         <section aria-label="Quests">
+          <div className="npc mb8">
+            <Druid act={questCast ? 'cast' : 'idle'} actKey={questCast} />
+            <div className="bubble"><b>Rowan · Quests</b>{claimable ? `You have ${claimable} quest${claimable > 1 ? 's' : ''} to hand in. Claim your reward!` : 'Head out and find birds. I will reward you for every quest you finish.'}</div>
+          </div>
           {slots.map(({ slot, kind }) => {
             const p = challengeProgress(st, slot, now);
             const ready = p.done && !slot.claimed;
@@ -301,7 +289,7 @@ export function YouTab() {
                 <div className="row mt8" style={{ gap: 10 }}>
                   <div className="grow"><Meter value={p.progress} max={p.goal} tone="river" label={p.label} /></div>
                   {slot.claimed ? <span className="px small" style={{ color: 'var(--lichen)' }}>✓ Done</span>
-                    : ready ? <button className="btn small primary" onClick={() => { const xp = claimChallenge(slot); sfx.levelUp(); nav.toast(`Quest complete! +${xp} XP · +${Math.round(xp / 10)} Feathers`); }}>Claim</button>
+                    : ready ? <button className="btn small primary" onClick={() => { const xp = claimChallenge(slot); sfx.levelUp(); setQuestCast((k) => k + 1); nav.toast(`Quest complete! +${xp} XP · +${Math.round(xp / 10)} Feathers`); }}>Claim</button>
                       : <span className="num small">{p.progress}/{p.goal}</span>}
                 </div>
               </div>

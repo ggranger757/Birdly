@@ -175,7 +175,7 @@ export function usingSeedFallback(code: string): string | null {
 const TTL = 7 * 864e5;
 const API = 'https://api.inaturalist.org/v1';
 
-async function getJSON(url: string, ms = 9000) {
+export async function getJSON(url: string, ms = 9000) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
   try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(String(r.status)); return await r.json(); }
   finally { clearTimeout(t); }
@@ -243,7 +243,7 @@ export async function ensureRegion(code: string, force = false): Promise<void> {
 }
 
 // ─── nearby sightings for the map ───
-export interface Sighting { id: number; sp: Species; lat: number; lng: number; observedOn: string; place?: string; photo?: string; user?: string }
+export interface Sighting { id: number; sp: Species; lat: number; lng: number; observedOn: string; observedAt?: string; place?: string; photo?: string; user?: string }
 
 export async function nearbySightings(lat: number, lng: number, radiusKm = 12, days = 30): Promise<{ list: Sighting[]; hidden: number }> {
   const d1 = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
@@ -257,8 +257,9 @@ export async function nearbySightings(lat: number, lng: number, radiusKm = 12, d
     const priv = (v: unknown) => v === 'obscured' || v === 'private';
     if (o.obscured || priv(o.geoprivacy) || priv(o.taxon_geoprivacy) || sp.sensitive) { hidden++; continue; }
     registerSpecies([sp]);
-    list.push({ id: o.id, sp, lng: o.geojson.coordinates[0], lat: o.geojson.coordinates[1], observedOn: o.observed_on ?? '', place: o.place_guess, photo: o.photos?.[0]?.url?.replace('square', 'small') });
+    list.push({ id: o.id, sp, lng: o.geojson.coordinates[0], lat: o.geojson.coordinates[1], observedOn: o.observed_on ?? '', observedAt: o.time_observed_at ?? o.created_at ?? undefined, place: o.place_guess, photo: o.photos?.[0]?.url?.replace('square', 'small') });
   }
+  list.sort((a, b) => (b.observedAt ?? b.observedOn).localeCompare(a.observedAt ?? a.observedOn));
   return { list, hidden };
 }
 

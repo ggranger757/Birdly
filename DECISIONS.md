@@ -18,7 +18,12 @@ One line per meaningful choice, with the reason.
 - **UI theme: near-black neutrals with a neon yellow-green primary (#C6FF1A) (user request).** Sprite palette unchanged; "gold" badge tier and Legendary rarity keep FIELD 32 Sun.
 - **Mobile-only layout.** The app is a 480 px column; desktop shows a note to open it on a phone.
 - **Sun times from region centroid (NOAA approx.) placed relative to solar noon.** Fixes sunsets that wrap past UTC midnight; tested across longitudes.
-- **Decor opens at 25 species, second/third scenes at 10 (GAM-8).** As specified; Feathers accumulate meanwhile.
+- **No decorations (user request).** Feathers are spent on feeder food only; extra Aviary scenes open at 10 species.
 - **One job per tab (user request).** Explore = find birds (full-screen map + pull-up drawer), BirdDex = collection, Snap = camera, Aviary = care (Birds · Feeder · Decor), Trainer = progress (Quests · Badges · Life list). Quests live only in Trainer; alerts surface where action is needed.
 - **Discovery language (user request).** Birds are found and discovered, never caught: "Discovered!", the Snap Lens records a bird's likeness while the real bird flies on.
 - **Owner-supplied sound clips** for purchases, new BirdDex entries, level-ups/badges and the Snap Lens throw; long jingles duck the music.
+- **Professor Merlin and Rowan the druid (owner art).** Merlin (a real small falcon) guides onboarding; Rowan runs the Feed Store and the quest board and casts on purchases and claims.
+- **Main theme is a streamed song.** Kept out of the install precache (2 MB) and cached on first play; it pauses/resumes across screens and ducks under jingles.
+- **Plain-language bird groups.** Songbird, Crow family, Bird of prey… replace invented type names; BirdDex filters are All/Found/Missing + group + where.
+- **Live data needs no login.** iNaturalist read endpoints are public with CORS `*`; Explore shows a live status, refreshes every 5 minutes, lists the latest nearby reports, and Settings has a live-data check.
+- **Sound only while the app is on screen.** All audio pauses on visibilitychange/pagehide and resumes on return.

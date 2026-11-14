@@ -297,21 +297,6 @@ export function toggleHabitatBird(id: string): boolean {
   return true;
 }
 
-export function buyDecor(key: string, price: number): boolean {
-  if (state.feathers < price || state.ownedDecor.includes(key)) return false;
-  setState((s) => ({ ...s, feathers: s.feathers - price, ownedDecor: [...s.ownedDecor, key], stats: { ...s.stats, spent: s.stats.spent + price } }));
-  return after(true);
-}
-
-export function placeDecor(slot: string, key: string | null) {
-  setState((s) => {
-    const decor = { ...s.diorama.decor };
-    for (const k of Object.keys(decor)) if (decor[k] === key) delete decor[k];
-    if (key) decor[slot] = key; else delete decor[slot];
-    return { ...s, diorama: { ...s.diorama, decor } };
-  });
-}
-
 export function setBiome(b: Habitat) { setState((s) => ({ ...s, diorama: { ...s.diorama, biome: b } })); }
 
 export function speciesCount(s: GameState) { return new Set(s.sightings.filter(counts).map((x) => x.speciesId)).size; }

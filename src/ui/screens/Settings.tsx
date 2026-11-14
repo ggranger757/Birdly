@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, setState, exportBackup, importBackup, resetAll, getState, PIPELINE_VERSION, setRegion, setTrainer } from '../../app/store';
 import { RegionPicker } from './RegionPicker';
+import { getJSON, providerStatus, regionEntries, ensureRegion } from '../../data/provider';
 import { regionLabel, getRegion } from '../../data/geo';
 import { music, currentTheme } from '../../app/audio';
 import type { Habitat } from '../../data/types';
@@ -61,9 +62,12 @@ export function Settings() {
           </select>
         </div>
 
+        <div className="label mb8">Live data</div>
+        <LiveCheck region={st.region} />
+
         <div className="label mb8">Play</div>
         <div className="panel">
-          <Toggle label="Music" on={st.settings.music} set={(v) => { set({ music: v }); const t = currentTheme(); music(null); if (v) music((t as 'explore') ?? 'explore'); }} hint="Original chiptune themes." />
+          <Toggle label="Music" on={st.settings.music} set={(v) => { set({ music: v }); const t = currentTheme(); music(null); if (v) music((t as 'explore') ?? 'explore'); }} hint="Main theme and chiptune music. Always pauses when you leave the app." />
           <Toggle label="Sound effects" on={st.settings.sound} set={(v) => set({ sound: v })} hint="Every sound has a visual equivalent." />
           <Toggle label="Haptics" on={st.settings.haptics} set={(v) => set({ haptics: v })} />
           <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />
@@ -217,3 +221,39 @@ function LabFrame({ sp, frame, sil, scale }: { sp: (typeof SPECIES)[number]; fra
 }
 
 export { getState, Icon, Sprite };
+
+/** Tests the live iNaturalist connection from this phone and explains the result in plain words. */
+function LiveCheck({ region }: { region: string }) {
+  const [res, setRes] = useState<{ ok: boolean; lines: string[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true); setRes(null);
+    const r = getRegion(region);
+    const lines: string[] = [];
+    let ok = true;
+    if (!navigator.onLine) { setRes({ ok: false, lines: ['This phone is offline. Connect to the internet and try again.'] }); setBusy(false); return; }
+    try {
+      const t0 = performance.now();
+      const j = await getJSON(`https://api.inaturalist.org/v1/observations?lat=${r.lat.toFixed(2)}&lng=${r.lng.toFixed(2)}&radius=100&taxon_id=3&per_page=5&order_by=observed_on`, 12000);
+      const n = j.total_results ?? 0;
+      lines.push(`✓ iNaturalist reachable (${Math.round(performance.now() - t0)} ms). ${n.toLocaleString()} bird observations around ${r.name}. No login or key needed.`);
+      const latest = j.results?.[0];
+      if (latest) lines.push(`✓ Newest report: ${latest.taxon?.preferred_common_name ?? latest.taxon?.name} on ${latest.observed_on}.`);
+    } catch (e) {
+      ok = false;
+      lines.push(`✗ Could not load data from iNaturalist (${(e as Error)?.name === 'AbortError' ? 'timed out' : (e as Error)?.message || 'network error'}). Try another network, or turn off any content blocker for this site.`);
+    }
+    const prov = providerStatus(region);
+    lines.push(prov === 'live' || prov === 'cached' ? `✓ Local BirdDex list loaded (${regionEntries(region).length} species).` : 'ℹ The local BirdDex list is still using the offline curated list. It will switch to live data on the next load.');
+    lines.push(`App version ${__APP_VERSION__}. If this is older than the latest upload, close and reopen the app to update.`);
+    setRes({ ok, lines }); setBusy(false);
+    if (ok) ensureRegion(region, true);
+  };
+  return (
+    <div className="panel">
+      <p className="small" style={{ marginTop: 0 }}>Bird lists and map sightings come live from iNaturalist. It's public data: no account, login or API key is needed.</p>
+      <button className="btn block" onClick={run} disabled={busy}>{busy ? 'Checking…' : 'Check live data'}</button>
+      {res && <div className="small mt8" role="status" style={{ color: res.ok ? 'var(--lichen)' : 'var(--oriole)' }}>{res.lines.map((l) => <div key={l} style={{ marginTop: 4 }}>{l}</div>)}</div>}
+    </div>
+  );
+}

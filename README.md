@@ -37,7 +37,9 @@ A sprite lab (every species, every animation frame, silhouette test) lives at `#
 
 - `public/bg/`: layered parallax backgrounds (owner-supplied).
 - `public/badges/`: 24 owner-supplied badge icons + capture effect, and 24 generated achievement badges (`b-*.png`). Regenerate or edit the generated ones with `python3 scripts/gen-badges.py` (frames per category, metals per tier, ASCII-art emblems).
-- `public/prof/druid.png`: **add the professor sprite sheet here.** Frames are detected automatically (rows and frames separated by empty space; a solid background colour is keyed out) and the first row plays as the idle animation. Until the file exists an owl stands in.
+- `public/chars/merlin.png`: Professor Merlin (48px cells; row 0 is the wing-flap hover).
+- `public/chars/druid.png`: Rowan the druid, shopkeeper and quest-giver (84px cells; rows: idle, run, hurt, vanish, staff sweep, leap).
+- `public/music/main-theme.mp3`: the main theme (title, Explore, Trainer). Streamed, looped and cached on first play.
 
 ## Data, privacy and licensing
 
