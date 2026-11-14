@@ -13,11 +13,25 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>PIXEL BIRDER</title>
     <style>html,body{background:#0a0c0f;margin:0}</style>
-    <script type="module" crossorigin src="./assets/index-DAurgxoW.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-EwT367Xy.css">
+    <script type="module" crossorigin src="./assets/index-DaVUUIln.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DTZJzjKi.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p id="boot-msg" style="font:14px system-ui,sans-serif;color:#B6C0C9;text-align:center;padding:40vh 24px 0">Loading PIXEL BIRDER…</p></div>
+    <script>
+      // If the app can't start, say why on screen instead of showing a black page.
+      (function () {
+        function show(msg) {
+          var el = document.getElementById('boot-msg');
+          if (!el) return;
+          el.innerHTML = 'PIXEL BIRDER could not start in this browser.<br><br><small style="color:#7F8B96">' +
+            String(msg).replace(/[<>&]/g, '') + '</small><br><br>Try opening the link in Safari or Chrome, and update the browser if you can.';
+        }
+        window.addEventListener('error', function (e) { show(e.message || (e.target && e.target.src ? 'Could not load ' + e.target.src : 'Unknown error')); }, true);
+        window.addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message ? e.reason.message : e.reason); });
+        setTimeout(function () { if (document.getElementById('boot-msg')) show('The app took too long to start.'); }, 12000);
+      })();
+    </script>
     <noscript>PIXEL BIRDER needs JavaScript to run.</noscript>
   </body>
 </html>

@@ -22,7 +22,21 @@
     <!--/gh-pages-redirect-->
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p id="boot-msg" style="font:14px system-ui,sans-serif;color:#B6C0C9;text-align:center;padding:40vh 24px 0">Loading PIXEL BIRDER…</p></div>
+    <script>
+      // If the app can't start, say why on screen instead of showing a black page.
+      (function () {
+        function show(msg) {
+          var el = document.getElementById('boot-msg');
+          if (!el) return;
+          el.innerHTML = 'PIXEL BIRDER could not start in this browser.<br><br><small style="color:#7F8B96">' +
+            String(msg).replace(/[<>&]/g, '') + '</small><br><br>Try opening the link in Safari or Chrome, and update the browser if you can.';
+        }
+        window.addEventListener('error', function (e) { show(e.message || (e.target && e.target.src ? 'Could not load ' + e.target.src : 'Unknown error')); }, true);
+        window.addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message ? e.reason.message : e.reason); });
+        setTimeout(function () { if (document.getElementById('boot-msg')) show('The app took too long to start.'); }, 12000);
+      })();
+    </script>
     <noscript>PIXEL BIRDER needs JavaScript to run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>

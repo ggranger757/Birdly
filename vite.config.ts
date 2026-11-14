@@ -55,6 +55,7 @@ export default defineConfig({
       }
     })
   ],
+  build: { target: ['es2020', 'safari14', 'chrome87', 'firefox78'] },
   worker: { format: 'es' },
   test: { environment: 'node', include: ['tests/**/*.test.ts'] }
 } as any);

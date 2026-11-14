@@ -38,7 +38,11 @@ const listeners = new Set<() => void>();
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function emit() { listeners.forEach((l) => l()); }
+// Saving waits until the saved journal has been read, so a slow or stuck IndexedDB
+// can never overwrite a real journal with a fresh one.
+let loadSettled = false;
 function persist() {
+  if (!loadSettled) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { saveState(state).catch(() => {}); }, 120);
 }
@@ -55,11 +59,23 @@ export function logEvent(e: string, d?: unknown) {
   persist();
 }
 
+function adopt(saved: GameState | undefined) {
+  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings } };
+}
+
 export async function initStore() {
-  try {
-    const saved = await loadState<GameState>();
-    if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings } };
-  } catch { /* private mode: run in memory */ }
+  // Some browsers (older iOS Safari, in-app webviews, private modes) never answer IndexedDB.
+  // Never block the first paint on it: start after 1.5s with an in-memory journal if needed.
+  const load = loadState<GameState>().then((v) => ({ ok: true as const, v }), () => ({ ok: false as const, v: undefined }));
+  const first = await Promise.race([load, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
+  if (first) { adopt(first.v); loadSettled = true; }
+  else {
+    load.then((res) => {
+      // Late answer: adopt the saved journal unless the player already caught something this session.
+      if (res.v && res.v.version && state.sightings.length === 0) { adopt(res.v); emit(); }
+      loadSettled = true; persist();
+    });
+  }
   const today = dayKey(new Date());
   if (state.lastSession !== today || state.sessions === 0) state = { ...state, sessions: state.sessions + 1, lastSession: today };
   refreshChallenges(new Date(), false);
