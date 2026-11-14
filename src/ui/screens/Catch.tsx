@@ -3,7 +3,7 @@ import type { CaptureJob } from '../nav';
 import { useNav } from '../nav';
 import type { Analysis, FieldcraftScore } from '../../core/pixel/extract';
 import { analyze } from '../../app/photo';
-import { fileCatch, CatchResult, useGame, getState, logEvent } from '../../app/store';
+import { fileCatch, CatchResult, useGame, getState, logEvent, nameBird } from '../../app/store';
 import { getRegion } from '../../data/geo';
 import { regionEntries, allKnownSpecies, taxonSummary } from '../../data/provider';
 import type { Species } from '../../data/types';
@@ -179,6 +179,8 @@ function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; 
 }
 
 function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: () => void }) {
+  const [nick, setNick] = useState('');
+  const [named, setNamed] = useState('');
   const s = result.sighting, sp = result.species;
   const lines = [
     s.speciesId ? `Discovered! ${sp.common.toUpperCase()} was recorded in the BirdDex${s.dex ? ` as ${dexNo(s.dex)}` : ''}.` : 'Discovered! An unidentified bird was recorded in your BirdDex. Name it later.',
@@ -205,7 +207,15 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
       if (played.current) return;
       if (/badge|level up/i.test(lines[i] ?? '')) { played.current = true; playClip('levelUp', { duck: true }); }
     }}>
-        <button className="btn primary block mt8" onClick={(e) => { e.stopPropagation(); onContinue(); }}>Continue</button>
+        {result.sighting.mode !== 'seen' && result.sighting.speciesId && (
+          <form className="name-inline mt8" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (nick.trim()) { nameBird(result.sighting.id, nick); sfx.select(); setNamed(nick.trim()); } }}>
+            <label className="sr-only" htmlFor="nick">Name your bird</label>
+            <input id="nick" value={nick} maxLength={18} onChange={(e) => { setNick(e.target.value); setNamed(''); }} placeholder={`Name your ${result.species.common} (optional)`}
+              style={{ flex: 1, minWidth: 0, minHeight: 44, padding: '6px 10px', background: '#fff', color: '#000', border: '2px solid #000', fontSize: 16 }} />
+            <button type="submit" className="btn small" disabled={!nick.trim()}>{named ? '✓ Named' : 'Name'}</button>
+          </form>
+        )}
+        <button className="btn primary block mt8" onClick={(e) => { e.stopPropagation(); if (nick.trim() && !named) nameBird(result.sighting.id, nick); onContinue(); }}>Continue</button>
       </Dialog>
     </>
   );

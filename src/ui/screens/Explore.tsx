@@ -324,6 +324,7 @@ const directions = (lat: number, lng: number) => `https://www.google.com/maps/di
 function MissionCard({ feed, caught }: { feed: Feed; caught: Set<string | null> }) {
   const mission = useGame((s) => s.mission);
   const skips = useGame((s) => s.missionSkips);
+  const snooze = useGame((s) => s.missionSnoozeUntil);
   const today = new Date(); const dk = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const skipped = new Set(skips?.day === dk ? skips.ids : []);
   const [, tick] = useState(0);
@@ -339,6 +340,7 @@ function MissionCard({ feed, caught }: { feed: Feed; caught: Set<string | null> 
       </div>
     );
   }
+  if (snooze && Date.parse(snooze) > Date.now()) return null;
   const fresh = feed.list.filter((o) => !skipped.has(o.sp.id) && !caught.has(o.sp.id) && !o.sp.sensitive && (!o.observedAt || Date.now() - Date.parse(o.observedAt) < 48 * 3600e3));
   if (!fresh.length) return null;
   const pick = feed.from ? fresh.slice().sort((a, b) => km(feed.from!, [a.lat, a.lng]) - km(feed.from!, [b.lat, b.lng]))[0] : fresh[0];

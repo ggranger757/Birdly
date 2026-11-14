@@ -7,6 +7,7 @@ import type { Habitat, Species } from '../data/types';
 export type Verification = 'verified' | 'self-reported' | 'unverified' | 'vagrant';
 
 export interface Sighting {
+  nickname?: string; // the name the player gave this bird
   id: string;
   speciesId: string | null;      // null while unverified
   region: string;
@@ -67,7 +68,7 @@ export interface GameState {
   installStartedAt: string;
   log: { t: string; e: string; d?: unknown }[]; // local analytics ring buffer (TEC-8), never leaves the device
   trainerName: string;
-  partner: { speciesId: string; parts: number[] } | null;
+  partner: { speciesId: string; parts: number[]; nickname?: string; pet?: { hp: number; at: string } } | null;
   speciesDefs: Record<string, Species>; // live species the player has caught, kept for offline use
   items: { seeds: number; berries: number; worms: number }; // food bags in the pantry
   lenses: string[]; lens: string;
@@ -76,7 +77,8 @@ export interface GameState {
   tipsSeen?: string[];
   petGifts?: Record<string, string>; // bird id → day it last brought a gift
   lastSeenAt?: string;               // last time the app was open (for welcome-back care)
-  missionSkips?: { day: string; ids: string[] }; // species skipped today // sightings the player said 'not now' to today
+  missionSkips?: { day: string; ids: string[] }; // species skipped today
+  missionSnoozeUntil?: string;                    // no mission offers until this time (after 'Not now') // sightings the player said 'not now' to today
   mission?: { speciesId: string; name: string; lat: number; lng: number; until: string } | null; // go-find-it mission from a live sighting    // one-time Merlin tips already dismissed
   chapters?: Record<string, string>; // claimed BirdDex chapter rewards (id → ISO date) // Merlin's guided tour finished or skipped // owned Snap Lenses and the one in use
   feeder: { level: number };       // food points in the Aviary feeder

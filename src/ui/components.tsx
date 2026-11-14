@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState, ReactNode, useSyncExternalStore } from 'react';
 import type { Species } from '../data/types';
 import { renderFrames, defaultParts, silhouette } from '../core/pixel/sprite';
@@ -182,7 +183,9 @@ export function Sheet({ onClose, children, label }: { onClose: () => void; child
   const [drag, setDrag] = useState(0);
   const start = useRef<number | null>(null);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
-  return (
+  // render at the app root so the sheet always sits at the bottom of the screen, whatever is scrolled
+  const host = typeof document !== 'undefined' ? document.querySelector('.app') : null;
+  const body = (
     <>
       <div className="sheet-backdrop" onClick={onClose} />
       <div className="sheet" role="dialog" aria-modal="true" aria-label={label} style={{ transform: drag ? `translateY(${drag}px)` : undefined }}>
@@ -194,6 +197,7 @@ export function Sheet({ onClose, children, label }: { onClose: () => void; child
       </div>
     </>
   );
+  return host ? createPortal(body, host) : body;
 }
 
 export function useRefPhoto(sp: Species | null): RefPhoto | null | undefined {

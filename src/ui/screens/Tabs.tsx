@@ -1,7 +1,7 @@
 import { FoodIcon } from '../FoodIcon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, petBird, fillFeeder, tickFeeder } from '../../app/store';
+import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, petBird, partnerPet, birdName, nameBird, fillFeeder, tickFeeder } from '../../app/store';
 import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
 import { getRegion, regionLabel } from '../../data/geo';
 import { allKnownSpecies } from '../../data/provider';
@@ -9,6 +9,7 @@ import { gameMusic } from '../../app/audio';
 import { Types, BirdThumb, dexNo, BadgeIcon, HpBar, Capsule } from '../game';
 import { LENSES, LENS_ORDER, lensOf } from '../../core/lenses';
 import { LensList } from '../LensList';
+import { factsFor } from '../../data/facts';
 import { PageHeader, Segmented, Alert, FeatherChip } from '../kit';
 import { Professor } from '../Characters';
 import { Diorama, SCENES, paintHomeThumb } from '../../render/diorama';
@@ -31,12 +32,23 @@ export function HabitatTab() {
   const boxRef = useRef<HTMLDivElement>(null);
   const dio = useRef<Diorama | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | 'homes' | null>(null);
+  const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | null>(null);
   const [section, setSection] = useState<'birds' | 'feeder'>('birds');
   const [sceneLabel, setSceneLabel] = useState('');
   const [gift, setGift] = useState(0);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const stripRef = useRef<HTMLDivElement>(null);
+  // keep the chosen home in view inside the strip (sideways only, never moves the page)
+  useEffect(() => {
+    const strip = stripRef.current; const on = strip?.querySelector<HTMLElement>('.home-card.on');
+    if (strip && on) strip.scrollLeft = Math.max(0, on.offsetLeft - strip.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2);
+  }, [st.diorama.home, section]);
   const [hello, setHello] = useState<{ key: string; text: string; gift: number; at: number } | null>(null);
+  const [naming, setNaming] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  useEffect(() => { if (naming) setNameDraft(birdName(naming) === (naming === 'partner' ? allKnownSpecies().find((x) => x.id === st.partner?.speciesId)?.common : speciesOf(st.sightings.find((x) => x.id === naming)!).common) ? '' : birdName(naming)); }, [naming]);
+  const [fact, setFact] = useState<{ name: string; species: string; text: string } | null>(null);
+  const factIdx = useRef<Record<string, number>>({});
   useEffect(() => { if (!hello) return; const t = setTimeout(() => setHello(null), 2700); return () => clearTimeout(t); }, [hello]);
   const [, tick] = useState(0);
   const species = speciesCount(st);
@@ -50,7 +62,8 @@ export function HabitatTab() {
 
   // birds visit the feeder: on open, every 20s, and right after you fill it
   const runFeeder = () => {
-    const before = new Map(getState().sightings.map((x) => [x.id, hpNow(x)]));
+    const pp0 = partnerPet(getState());
+    const before = new Map([...getState().sightings.map((x) => [x.id, hpNow(x)] as const), ...(pp0 ? [['partner', hpNow(pp0)] as const] : [])]);
     const m = tickFeeder();
     if (!m.length) return;
     setMeals(m);
@@ -75,7 +88,7 @@ export function HabitatTab() {
     dio.current = d;
     setSceneLabel(d.scene.label);
     const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
-    if (partner && st.partner) d.add('partner', partner, st.partner.parts, { arrive: false, seed: 1 });
+    if (partner && st.partner) d.add('partner', partner, st.partner.parts, { arrive: false, seed: 1, hp: hpNow(partnerPet(st)!) });
     aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3, hp: hpNow(s) }));
     d.start();
     return () => { d.dispose(); dio.current = null; };
@@ -102,22 +115,36 @@ export function HabitatTab() {
             const r = c.getBoundingClientRect(), k = c.width / r.width;
             const b = d.hit((e.clientX - r.left) * k, (e.clientY - r.top) * k); if (!b) return;
             d.poke(b.key); sfx.chirp(); haptic(10);
-            const sg = b.key === 'partner' ? null : st.sightings.find((x) => x.id === b.key);
-            const gift = sg ? petBird(sg.id) : 0;
+            const sg = b.key === 'partner' ? partnerPet(st) : st.sightings.find((x) => x.id === b.key);
+            const gift = sg && b.key !== 'partner' ? petBird(sg.id) : 0;
             const hp = sg ? hpNow(sg) : null;
-            setHello({ key: b.key, text: `${b.sp.common}${hp !== null ? ` · ${hp} HP · ${MOOD_LINE[mood(hp)]}` : ' · your partner'}`, gift, at: Date.now() });
+            setHello({ key: b.key, text: `${birdName(b.key, st)}${hp !== null ? ` · ${hp} HP · ${MOOD_LINE[mood(hp)]}` : ''}`, gift, at: Date.now() });
+            // a true fun fact, a different one on each tap
+            factsFor(b.sp).then((fs) => {
+              if (!fs.length) { setFact({ name: birdName(b.key, st), species: b.sp.common, text: '' }); return; }
+              const k = b.sp.id; const n = factIdx.current[k] ?? 0; factIdx.current[k] = n + 1;
+              setFact({ name: birdName(b.key, st), species: b.sp.common, text: fs[n % fs.length] });
+            });
             if (gift) { playClip('buy'); }
           }} />
         {hello && Date.now() - hello.at < 2600 && dio.current?.where(hello.key) && ref.current && (() => {
           const c = ref.current!, p = dio.current!.where(hello.key)!, s = c.getBoundingClientRect().width / c.width;
           return (
-            <div className="bird-hello" style={{ left: c.offsetLeft + p.x * s, top: c.offsetTop + (p.y - 40) * s }} role="status">
+            <div className="bird-hello" style={{ left: Math.min(c.offsetLeft + c.clientWidth - 112, Math.max(c.offsetLeft + 112, c.offsetLeft + p.x * s)), top: Math.max(c.offsetTop + 46, c.offsetTop + (p.y - 40) * s) }} role="status">
               {hello.text}{hello.gift ? <b> · brought you {hello.gift} Feathers!</b> : null}
             </div>
           );
         })()}
       </div>
-      {meals.length > 0 && <div className="small mt8" role="status" style={{ color: 'var(--lichen)' }}>{meals.map((m) => `${speciesOf(st.sightings.find((x) => x.id === m.id)!).common} ate (+${m.ate} HP)`).join(' · ')}</div>}
+      {fact && fact.text && (
+        <div className="fact-card" role="status" aria-live="polite">
+          <div className="fact-head"><span className="mission-tag">Fun fact</span> <b>{fact.name}</b>{fact.name !== fact.species ? <span className="small muted"> · {fact.species}</span> : null}<button className="icon-btn fact-x" aria-label="Close fact" onClick={() => setFact(null)}>✕</button></div>
+          <p className="small" style={{ margin: '4px 0 0' }}>{fact.text}</p>
+          <p className="small muted" style={{ margin: '4px 0 0', fontSize: 11 }}>Tap the bird again for another. Sources: BirdlyQuest field notes and Wikipedia (via iNaturalist).</p>
+        </div>
+      )}
+      {!fact && aviary.length + (st.partner ? 1 : 0) > 0 && <p className="small muted mt8" style={{ textAlign: 'center' }}>Tap a bird for a fun fact.</p>}
+      {meals.length > 0 && <div className="small mt8" role="status" style={{ color: 'var(--lichen)' }}>{meals.map((m) => `${birdName(m.id, st)} ate (+${m.ate} HP)`).join(' · ')}</div>}
 
       <Segmented label="Aviary sections" value={section} onChange={setSection} options={[
         { id: 'birds', label: 'Birds', badge: hungry || undefined },
@@ -127,24 +154,47 @@ export function HabitatTab() {
       {section === 'birds' && (
         <section aria-label="Birds in your aviary">
           {aviary.length === 0 && <p className="small muted">Photograph a real bird to bring your first pet home. Your partner is waiting here.</p>}
-          {aviary.slice().sort((a, b) => hpNow(a) - hpNow(b)).map((x) => {
-            const hp = hpNow(x);
-            return (
-              <button key={x.id} className="panel" style={{ width: '100%', padding: 8, display: 'flex', gap: 10, alignItems: 'center', textAlign: 'left', borderColor: hp < 30 ? 'var(--brick)' : undefined }}
-                onClick={() => nav.open({ name: 'species', id: x.speciesId ?? '_unknown', sightingId: x.id })}>
-                <span style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={speciesOf(x)} parts={x.sprite.parts} scale={2} mode={hp < 30 ? 'static' : 'idle'} /></span>
-                <span className="grow">
-                  <span className="row between"><span className="name small">{speciesOf(x).common}</span><span className="px" style={{ fontSize: 10 }}>Lv{x.level ?? 5}</span></span>
-                  <HpBar hp={hp} />
-                  <span className="small" style={{ color: hp < 30 ? 'var(--oriole)' : 'var(--stone)' }}>{MOOD_LINE[mood(hp)]}</span>
-                </span>
-              </button>
-            );
-          })}
+          {(() => {
+            const pp = partnerPet(st); const psp = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
+            const rows = [
+              ...(pp && psp && st.partner ? [{ id: 'partner', sp: psp, parts: st.partner.parts, hp: hpNow(pp), level: undefined as number | undefined, open: () => nav.open({ name: 'species', id: psp.id }), tag: 'Partner' }] : []),
+              ...aviary.map((x) => ({ id: x.id, sp: speciesOf(x), parts: x.sprite.parts, hp: hpNow(x), level: x.level ?? 5, open: () => nav.open({ name: 'species', id: x.speciesId ?? '_unknown', sightingId: x.id }), tag: '' })),
+            ].sort((a, b) => a.hp - b.hp);
+            return rows.map((r) => (
+              <div key={r.id} className="panel pet-row" style={{ borderColor: r.hp < 30 ? 'var(--brick)' : undefined }}>
+                <button className="pet-main" onClick={r.open} aria-label={`${birdName(r.id, st)}, ${r.sp.common}, ${r.hp} HP. Open details`}>
+                  <span style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={r.sp} parts={r.parts} scale={2} mode={r.hp < 30 ? 'static' : 'idle'} /></span>
+                  <span className="grow" style={{ minWidth: 0 }}>
+                    <span className="row between"><span className="name small">{birdName(r.id, st)}</span><span className="px" style={{ fontSize: 10 }}>{r.tag || `Lv${r.level}`}</span></span>
+                    {birdName(r.id, st) !== r.sp.common && <span className="small muted">{r.sp.common}</span>}
+                    <HpBar hp={r.hp} />
+                    <span className="small" style={{ color: r.hp < 30 ? 'var(--oriole)' : 'var(--stone)' }}>{MOOD_LINE[mood(r.hp)]}</span>
+                  </span>
+                </button>
+                <button className="btn small ghost pet-name-btn" onClick={() => { sfx.select(); setNaming(r.id); }} aria-label={`Name ${birdName(r.id, st)}`}>✎ Name</button>
+              </div>
+            ));
+          })()}
           <button className="btn block" onClick={() => setSheet('box')}>Bird Box · {box.length} resting</button>
           <p className="small muted">Aviary birds eat from the feeder and earn you Feathers. Birds in the Bird Box rest and don't get hungry.</p>
-          <div className="section-title"><span>Bird Home</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{sceneLabel}</span></div>
-          <button className="btn block" onClick={() => setSheet('homes')}>Change Bird Home</button>
+          <div className="section-title"><span>Bird Homes</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{Object.values(SCENES).filter((h) => h.level <= lv).length}/{Object.keys(SCENES).length} unlocked</span></div>
+          <div className="home-strip" role="radiogroup" aria-label="Bird Homes" ref={stripRef}>
+            <button role="radio" className={`home-card auto ${!st.diorama.home ? 'on' : ''}`} aria-checked={!st.diorama.home} onClick={() => { sfx.select(); haptic(8); setHome(undefined); }}>
+              <span className="home-auto" aria-hidden>☀ → ☾</span>
+              <span className="small">Changes with the day</span>
+            </button>
+            {Object.values(SCENES).map((sc) => {
+              const locked = sc.level > lv, on = st.diorama.home === sc.id;
+              return (
+                <button key={sc.id} role="radio" className={`home-card ${on ? 'on' : ''} ${locked ? 'locked' : ''}`} aria-checked={on} disabled={locked}
+                  aria-label={locked ? `${sc.label}, unlocks at level ${sc.level}` : sc.label}
+                  onClick={() => { sfx.select(); haptic(8); setHome(sc.id); }}>
+                  <HomeThumb id={sc.id} />
+                  <span className="small">{locked ? `🔒 Lv ${sc.level}` : sc.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -179,29 +229,6 @@ export function HabitatTab() {
       )}
 
 
-      {sheet === 'homes' && (
-        <Sheet onClose={() => setSheet(null)} label="Bird Homes">
-          <h3 className="mb8">Bird Homes</h3>
-          <p className="small muted" style={{ marginTop: 0 }}>Pick where your birds live. Level up by discovering birds to unlock more homes. You're Lv {lv}: {Object.values(SCENES).filter((h) => h.level <= lv).length} of {Object.keys(SCENES).length} unlocked.</p>
-          <button className={`panel ${!st.diorama.home ? 'highlight' : ''}`} style={{ width: '100%', margin: '0 0 10px', textAlign: 'left' }} aria-pressed={!st.diorama.home}
-            onClick={() => { sfx.select(); setHome(undefined); }}>
-            <span className="name">Changes with the day</span><br /><span className="small muted">A {st.habitat === 'urban' ? 'city' : st.habitat === 'woodland' ? 'woodland' : 'wetland'} home that shifts from dawn to night</span>
-          </button>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {Object.values(SCENES).map((sc) => {
-              const locked = sc.level > lv;
-              return (
-                <button key={sc.id} className={`home-card ${st.diorama.home === sc.id ? 'on' : ''} ${locked ? 'locked' : ''}`} aria-pressed={st.diorama.home === sc.id} disabled={locked}
-                  onClick={() => { sfx.select(); haptic(8); setHome(sc.id); }}>
-                  <HomeThumb id={sc.id} />
-                  <span className="small">{locked ? `🔒 Lv ${sc.level}` : sc.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Sheet>
-      )}
-
       {sheet === 'fill' && (
         <Sheet onClose={() => setSheet(null)} label="Fill the feeder">
           <div className="row between mb8"><h3>Fill the feeder</h3><span className="num small">{st.feeder.level}/{FEEDER_CAP}</span></div>
@@ -221,6 +248,21 @@ export function HabitatTab() {
           )}
         </Sheet>
       )}
+      {naming && (
+        <Sheet onClose={() => setNaming(null)} label="Name your bird">
+          <h3 className="mb8">Name your bird</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>Give your {naming === 'partner' ? allKnownSpecies().find((x) => x.id === st.partner?.speciesId)?.common : speciesOf(st.sightings.find((x) => x.id === naming)!).common} a name. Leave it empty to use the species name.</p>
+          <form onSubmit={(e) => { e.preventDefault(); nameBird(naming, nameDraft); sfx.select(); nav.toast(nameDraft.trim() ? `Say hello to ${nameDraft.trim()}!` : 'Name cleared'); setNaming(null); }}>
+            <label className="label" htmlFor="birdname">Name</label>
+            <input id="birdname" autoFocus value={nameDraft} maxLength={18} onChange={(e) => setNameDraft(e.target.value)} placeholder="e.g. Pip"
+              style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: 'var(--well)', border: '2px solid var(--accent)', fontSize: 18, margin: '6px 0 12px' }} />
+            <div className="btn-pair">
+              <button type="button" className="btn" onClick={() => setNaming(null)}>Cancel</button>
+              <button type="submit" className="btn primary">Save</button>
+            </div>
+          </form>
+        </Sheet>
+      )}
       {sheet === 'box' && (
         <Sheet onClose={() => setSheet(null)} label="Bird Box">
           <h3 className="mb8">Bird Box · {box.length}</h3>
@@ -230,7 +272,7 @@ export function HabitatTab() {
             return (
               <div key={s.id} className="srow">
                 <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={1} mode="static" />
-                <span className="grow"><span className="name">{speciesOf(s).common}</span><br /><span style={{ display: 'block', width: 120 }}><HpBar hp={hpNow(s)} compact /></span></span>
+                <span className="grow"><span className="name">{birdName(s.id, st)}</span>{s.nickname ? <span className="small muted"> · {speciesOf(s).common}</span> : null}<br /><span style={{ display: 'block', width: 120 }}><HpBar hp={hpNow(s)} compact /></span></span>
                 <button className="btn small" onClick={() => { if (!toggleHabitatBird(s.id)) nav.toast(`The Aviary holds ${AVIARY_MAX} birds. Move one to the Bird Box first.`); }}>{here ? 'To box' : 'To aviary'}</button>
               </div>
             );

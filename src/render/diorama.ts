@@ -487,13 +487,13 @@ export class Diorama {
   /** Tiny floating HP bar over the bird's head; glows and shows a "+" while it fills. */
   private drawHp(g: CanvasRenderingContext2D, b: Bird, t: number, lift = 0) {
     if (b.hp === undefined || b.state === 'gone') return;
-    const w = 14, x = Math.round(b.x - w / 2), y = Math.max(2, Math.round(b.y - 36 - lift + (b.state === 'perched' && !b.returnAt ? Math.floor(t / 500) % 2 : 0)));
+    const w = 18, x = Math.round(b.x - w / 2), y = Math.max(2, Math.round(b.y - 37 - lift + (b.state === 'perched' && !b.returnAt ? Math.floor(t / 500) % 2 : 0)));
     const v = Math.max(0, Math.min(100, b.hp)) / 100;
     const filling = b.hpTo !== undefined && b.hpT0 !== undefined && t >= b.hpT0;
     const col = v > 0.5 ? '#7CE85A' : v > 0.25 ? '#F2C230' : '#E8533C';
-    g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, w + 2, 4);
-    g.fillStyle = '#2A333D'; g.fillRect(x, y, w, 2);
-    g.fillStyle = filling && Math.floor(t / 120) % 2 ? '#E9FF70' : col; g.fillRect(x, y, Math.max(v > 0 ? 1 : 0, Math.round(w * v)), 2);
+    g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, w + 2, 5);
+    g.fillStyle = '#2A333D'; g.fillRect(x, y, w, 3);
+    g.fillStyle = filling && Math.floor(t / 120) % 2 ? '#E9FF70' : col; g.fillRect(x, y, Math.max(v > 0 ? 1 : 0, Math.round(w * v)), 3);
     if (filling) { // little rising "+"
       const k = ((t - b.hpT0!) % 700) / 700, py = Math.round(y - 3 - k * 6);
       g.fillStyle = `rgba(233,255,112,${1 - k})`; g.fillRect(x + w + 2, py, 3, 1); g.fillRect(x + w + 3, py - 1, 1, 3);

@@ -360,7 +360,7 @@ export function setRegion(code: string) {
 export function setTrainer(name: string) { setState((s) => ({ ...s, trainerName: name.slice(0, 16) })); }
 export function setPartner(sp: Species) {
   const parts = assembleSprite(sp, null, `partner${sp.id}`).parts;
-  setState((s) => ({ ...s, partner: { speciesId: sp.id, parts }, speciesDefs: sp.id.startsWith('inat-') ? { ...s.speciesDefs, [sp.id]: sp } : s.speciesDefs }));
+  setState((s) => ({ ...s, partner: { speciesId: sp.id, parts, pet: { hp: 90, at: new Date().toISOString() } }, speciesDefs: sp.id.startsWith('inat-') ? { ...s.speciesDefs, [sp.id]: sp } : s.speciesDefs }));
 }
 
 // ─── achievements outside of discoveries ───
@@ -396,10 +396,10 @@ export function setMission(m: { speciesId: string; name: string; lat: number; ln
   if (m) logEvent('mission_start', m.speciesId);
 }
 
-/** Say "not now" to an offered mission; that species isn't offered again today. */
+/** Say "not now" to an offered mission: no offers for 2 hours, and that species isn't offered again today. */
 export function skipMission(speciesId: string) {
   const day = dayKey(new Date());
-  setState((s) => ({ ...s, missionSkips: { day, ids: [...(s.missionSkips?.day === day ? s.missionSkips.ids : []).filter((x) => typeof x === 'string'), speciesId] } }));
+  setState((s) => ({ ...s, missionSkips: { day, ids: [...(s.missionSkips?.day === day ? s.missionSkips.ids : []).filter((x) => typeof x === 'string'), speciesId] }, missionSnoozeUntil: new Date(Date.now() + 2 * 3600e3).toISOString() }));
   logEvent('mission_skip', speciesId);
 }
 
@@ -432,12 +432,15 @@ export function fillFeeder(food: Food): number {
 /** Hungry Aviary birds eat from the feeder. Call often; it only changes state when someone eats. */
 export function tickFeeder(now = new Date()): Meal[] {
   const ids = new Set(state.diorama.birds);
-  const birds = state.sightings.filter((x) => ids.has(x.id));
+  const pp = partnerPet();
+  const birds = [...state.sightings.filter((x) => ids.has(x.id)), ...(pp ? [pp] : [])];
   if (!birds.length) return [];
   const r = visitFeeder(birds, state.feeder.level, now);
   if (!r.meals.length) return [];
   const by = new Map(r.birds.map((b) => [b.id, b]));
-  setState((s) => ({ ...s, feeder: { level: r.level }, sightings: s.sightings.map((x) => by.get(x.id) ?? x) }));
+  const np = by.get('partner');
+  setState((s) => ({ ...s, feeder: { level: r.level }, sightings: s.sightings.map((x) => by.get(x.id) ?? x),
+    partner: s.partner && np ? { ...s.partner, pet: np.pet as { hp: number; at: string } } : s.partner }));
   return after(r.meals);
 }
 
@@ -463,7 +466,12 @@ export function welcomeBack(now = new Date()): number {
       fed++; return { ...x, pet: { hp: 50, at: now.toISOString() } };
     });
   }
-  setState((s) => ({ ...s, sightings, lastSeenAt: now.toISOString() }));
+  let partner = state.partner;
+  // partners from older versions had no HP yet: start them healthy now
+  if (partner && !partner.pet) partner = { ...partner, pet: { hp: 90, at: now.toISOString() } };
+  const pp = partner ? partnerPet({ ...state, partner }) : null;
+  if (away > 20 * 3600e3 && pp && partner && hpNow(pp, now) < 40) { fed++; partner = { ...partner, pet: { hp: 50, at: now.toISOString() } }; }
+  setState((s) => ({ ...s, sightings, partner, lastSeenAt: now.toISOString() }));
   return fed;
 }
 
@@ -475,8 +483,27 @@ export function collectAviary(now = new Date()): number {
   setState((s) => ({ ...s, petDay: today, feathers: s.feathers + n }));
   return n;
 }
+/** The partner bird as a pet record, so it gets hungry and eats like the others. */
+export function partnerPet(st: GameState = state): Sighting | null {
+  if (!st.partner) return null;
+  return { id: 'partner', capturedAt: st.installStartedAt, pet: st.partner.pet ?? { hp: 90, at: new Date().toISOString() } } as unknown as Sighting;
+}
+/** What to call a bird: its nickname, else its species name. */
+export function birdName(id: string, st: GameState = state): string {
+  if (id === 'partner') return st.partner?.nickname || speciesById(st.partner?.speciesId ?? '')?.common || 'Partner';
+  const s = st.sightings.find((x) => x.id === id);
+  return s ? s.nickname || speciesOf(s).common : 'Bird';
+}
+/** Give a found bird (or your partner) a name. Empty clears it. */
+export function nameBird(id: string, name: string) {
+  const n = name.trim().slice(0, 18) || undefined;
+  if (id === 'partner') setState((s) => ({ ...s, partner: s.partner ? { ...s.partner, nickname: n } : s.partner }));
+  else setState((s) => ({ ...s, sightings: s.sightings.map((x) => (x.id === id ? { ...x, nickname: n } : x)) }));
+  logEvent('name_bird', !!n);
+}
 export function hungryCount(now = new Date()): number {
-  return state.sightings.filter((x) => inAviary(x.id) && hpNow(x, now) < 30).length;
+  const pp = partnerPet();
+  return state.sightings.filter((x) => inAviary(x.id) && hpNow(x, now) < 30).length + (pp && hpNow(pp, now) < 30 ? 1 : 0);
 }
 
 // e2e/dev only: lets automated checks seed a save. Stripped from production builds.

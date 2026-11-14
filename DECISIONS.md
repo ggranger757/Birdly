@@ -47,4 +47,9 @@ One line per meaningful choice, with the reason.
 - **BirdDex is a field guide.** Goals (chapters) → look-up search → All / Found / To find → a sticky group index → one section per bird group with a found count. Unfound birds show their name (a guide you can look things up in), as a silhouette. "Life list" is now "Bird list".
 - **Equal heights on every row.** BirdDex cards are a fixed 4-row grid (number / art / name / footer); chapter cards, pantry tiles, button pairs, Explore cards, Bird Home and theme cards stretch to the tallest item in their row.
 - **Pixel food icons** replace emoji so Seed Mix, Berry Mash and Mealworm Tub match the art style on every phone.
-- **Missions can be declined.** "Not now" skips that species for the rest of the day and offers the next one.
+- **Missions can be declined.** "Not now" hides mission offers for 2 hours, and that species is not offered again that day.
+- **Bird Homes live on the Aviary page** as a horizontal strip (no extra "Change" step); the chosen home is centred, locked homes show the level they unlock at.
+- **Sheets render at the app root** (React portal) so they always sit at the bottom of the screen, even when the page behind them is scrolled.
+- **Fun facts are sourced, never generated.** Tapping a bird shows the curated BirdlyQuest fact for its species, then whole sentences from its Wikipedia summary (via iNaturalist), one per tap.
+- **The partner is a pet too.** It has HP, gets hungry, eats from the feeder and is cared for by Merlin's welcome-back feeding, so its HP bar shows above it like every other bird.
+- **Birds can be named.** Right after a discovery (optional field) or any time from the Aviary list (✎ Name). Names show in the Aviary, its labels, the Bird Box and meal messages; the species name stays alongside.
