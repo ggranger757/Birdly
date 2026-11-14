@@ -6,12 +6,13 @@ import { sfx } from '../app/audio';
 import { useRefPhoto, reducedMotionNow } from './components';
 
 /** Typewriter dialogue box. Tap to finish the line, tap again to advance. */
-export function Dialog({ lines, onDone, speaker, children, auto }: { lines: string[]; onDone?: () => void; speaker?: string; children?: ReactNode; auto?: number }) {
+export function Dialog({ lines, onDone, speaker, children, auto, onLine }: { lines: string[]; onDone?: () => void; speaker?: string; children?: ReactNode; auto?: number; onLine?: (i: number) => void }) {
   const [i, setI] = useState(0);
   const [shown, setShown] = useState(0);
   const line = lines[Math.min(i, lines.length - 1)] ?? '';
   const done = shown >= line.length;
   useEffect(() => { setI(0); setShown(0); }, [lines.join('|')]);
+  useEffect(() => { onLine?.(i); }, [i, lines.join('|')]);
   useEffect(() => {
     if (reducedMotionNow()) { setShown(line.length); return; }
     if (shown >= line.length) return;

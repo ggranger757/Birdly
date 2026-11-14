@@ -18,17 +18,17 @@ const HAB_LABEL: Record<string, string> = { urban: 'urban patch', woodland: 'woo
 const isNew = (s: GameState, x: Sighting) => x.firstRecord;
 
 export const DAILY: ChallengeDef[] = [
-  { id: 'D1', kind: 'daily', xp: 60, quick: true, goal: (n) => Number(n) || 2, label: (n) => `Catch ${n} birds`, progress: (_s, sc) => sc.length },
-  { id: 'D2', kind: 'daily', xp: 120, goal: () => 1, label: () => 'Catch a new species', progress: (s, sc) => sc.filter((x) => isNew(s, x)).length },
+  { id: 'D1', kind: 'daily', xp: 60, quick: true, goal: (n) => Number(n) || 2, label: (n) => `Find ${n} birds`, progress: (_s, sc) => sc.length },
+  { id: 'D2', kind: 'daily', xp: 120, goal: () => 1, label: () => 'Discover a new species', progress: (s, sc) => sc.filter((x) => isNew(s, x)).length },
   { id: 'D3', kind: 'daily', xp: 80, goal: () => 1, label: (n) => `Score ${n}+ on a photo`, progress: (_s, sc, n) => sc.filter((x) => (x.fieldcraft?.total ?? 0) >= Number(n)).length },
-  { id: 'D4', kind: 'daily', xp: 100, goal: () => 1, label: (f) => `Catch one of the ${String(f).toLowerCase()}`, progress: (_s, sc, f) => sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.familyName === f).length },
-  { id: 'D5', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Catch a bird before 08:00', progress: (_s, sc) => sc.filter((x) => x.hour < 8).length },
-  { id: 'D6', kind: 'daily', xp: 90, goal: () => 1, label: (h) => `Catch in a ${HAB_LABEL[String(h)]}`, progress: (_s, sc, h) => sc.filter((x) => x.habitat === h).length },
-  { id: 'D7', kind: 'daily', xp: 110, goal: () => 1, label: () => 'Catch an Uncommon or rarer', progress: (_s, sc) => sc.filter((x) => x.rarity !== 'common').length },
+  { id: 'D4', kind: 'daily', xp: 100, goal: () => 1, label: (f) => `Find one of the ${String(f).toLowerCase()}`, progress: (_s, sc, f) => sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.familyName === f).length },
+  { id: 'D5', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Find a bird before 08:00', progress: (_s, sc) => sc.filter((x) => x.hour < 8).length },
+  { id: 'D6', kind: 'daily', xp: 90, goal: () => 1, label: (h) => `Find a bird in a ${HAB_LABEL[String(h)]}`, progress: (_s, sc, h) => sc.filter((x) => x.habitat === h).length },
+  { id: 'D7', kind: 'daily', xp: 110, goal: () => 1, label: () => 'Find an Uncommon or rarer bird', progress: (_s, sc) => sc.filter((x) => x.rarity !== 'common').length },
   { id: 'D8', kind: 'daily', xp: 100, goal: () => 1, label: () => 'File a plumage record', progress: (_s, sc) => sc.filter((x) => x.newPlumage).length },
-  { id: 'D9', kind: 'daily', xp: 70, quick: true, goal: () => 2, label: () => 'Catch 2 different species', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId).map((x) => x.speciesId)).size },
-  { id: 'D10', kind: 'daily', xp: 80, quick: true, goal: () => 3, label: () => 'Catch 3 birds in one session', progress: (_s, sc) => maxInSession(sc) },
-  { id: 'D11', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Catch a bird after sunset', progress: (_s, sc) => sc.filter((x) => x.phase === 'dusk' || x.phase === 'night').length },
+  { id: 'D9', kind: 'daily', xp: 70, quick: true, goal: () => 2, label: () => 'Find 2 different species', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId).map((x) => x.speciesId)).size },
+  { id: 'D10', kind: 'daily', xp: 80, quick: true, goal: () => 3, label: () => 'Find 3 birds in one outing', progress: (_s, sc) => maxInSession(sc) },
+  { id: 'D11', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Find a bird after sunset', progress: (_s, sc) => sc.filter((x) => x.phase === 'dusk' || x.phase === 'night').length },
   { id: 'D12', kind: 'daily', xp: 50, goal: () => 1, label: () => 'Share a journal spread', progress: (s) => s.events.shares.filter((d) => d === dayKey(new Date())).length },
 ];
 
@@ -71,7 +71,7 @@ const migrant = (x: Sighting) => {
 export const SEASONAL: ChallengeDef[] = [
   { id: 'S1', kind: 'seasonal', xp: 500, goal: () => 15, label: () => 'Spring Migration: 15 migrants', progress: (_s, sc) => new Set(sc.filter(migrant).map((x) => x.speciesId)).size },
   { id: 'S2', kind: 'seasonal', xp: 400, goal: () => 8, label: () => 'Winter Waterfowl: 8 waterfowl', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.family === 'Anatidae').map((x) => x.speciesId)).size },
-  { id: 'S3', kind: 'seasonal', xp: 350, goal: () => 5, label: () => 'Dawn Chorus Month: 5 catches before 07:00', progress: (_s, sc) => sc.filter((x) => x.hour < 7).length },
+  { id: 'S3', kind: 'seasonal', xp: 350, goal: () => 5, label: () => 'Dawn Chorus Month: 5 birds before 07:00', progress: (_s, sc) => sc.filter((x) => x.hour < 7).length },
   { id: 'S4', kind: 'seasonal', xp: 500, goal: () => 10, label: () => 'Autumn Passage: 10 migrants', progress: (_s, sc) => new Set(sc.filter(migrant).map((x) => x.speciesId)).size },
 ];
 

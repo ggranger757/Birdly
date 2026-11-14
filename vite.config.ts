@@ -22,7 +22,7 @@ export default defineConfig({
       manifest: {
         name: 'BirdlyQuest',
         short_name: 'BirdlyQuest',
-        description: 'Catch real birds with your camera. A pixel bird-collecting quest.',
+        description: 'Discover real birds with your camera. A pixel bird-finding quest.',
         start_url: './',
         scope: './',
         display: 'standalone',
@@ -37,7 +37,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2,webmanifest,mp3}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
         runtimeCaching: [

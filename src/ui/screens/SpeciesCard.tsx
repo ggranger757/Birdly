@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, plumagesOf, deletePhotoKeepSprite, toggleHabitatBird, identifySighting, deleteSighting, counts } from '../../app/store';
-import { speciesById, allKnownSpecies, regionEntries } from '../../data/provider';
+import { speciesById, allKnownSpecies, regionEntries, taxonSummary } from '../../data/provider';
 import { getRegion, regionLabel } from '../../data/geo';
 import { Types, BirdThumb, dexNo, HpBar } from '../game';
 import { hpNow, mood, MOOD_LINE } from '../../core/pets';
@@ -22,6 +22,8 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
   const [sel, setSel] = useState<string | undefined>(sightingId ?? plumages[0]?.id ?? mine[0]?.id);
   const cur = mine.find((x) => x.id === sel) ?? mine[0];
   const [photo, setPhoto] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(sp.summary ?? null);
+  useEffect(() => { if (!sp.fact && !sp.summary && sp.inatId) taxonSummary(sp.inatId).then(setSummary); }, [sp.id]);
   const [identify, setIdentify] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { let live = true; photoURL(cur?.photoId ?? null).then((u) => live && setPhoto(u)); return () => { live = false; }; }, [cur?.photoId]);
@@ -90,7 +92,7 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
 
         <div className="row mt16" style={{ gap: 8 }}><Types sp={sp} />{sp.sensitive && <span className="chip">Sensitive</span>}</div>
         {sp.fact ? <p style={{ fontStyle: 'italic' }} className="mt8">“{sp.fact}”</p>
-          : sp.summary ? <p className="small mt8">{sp.summary}… <span className="muted">— Wikipedia, via iNaturalist</span></p> : null}
+          : summary ? <p className="small mt8">{summary}… <span className="muted">— Wikipedia, via iNaturalist</span></p> : null}
 
         {(cur?.verification === 'unverified' || cur?.verification === 'vagrant') && (
           <div className="panel">

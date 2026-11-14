@@ -89,6 +89,38 @@ export const sfx = {
   fanfare: () => sfx.levelUp(),
 };
 
+// ─── recorded jingles (owner-supplied MP3s), played through WebAudio for low latency ───
+type Clip = 'buy' | 'newBird' | 'levelUp' | 'throw';
+const CLIP_URL: Record<Clip, string> = { buy: 'sfx/buy.mp3', newBird: 'sfx/new-bird.mp3', levelUp: 'sfx/level-up.mp3', throw: 'sfx/throw.mp3' };
+const clipBuf = new Map<Clip, Promise<AudioBuffer | null>>();
+function loadClip(name: Clip): Promise<AudioBuffer | null> {
+  const c = ac(); if (!c) return Promise.resolve(null);
+  if (!clipBuf.has(name)) {
+    clipBuf.set(name, fetch(CLIP_URL[name]).then((r) => r.arrayBuffer())
+      .then((b) => new Promise<AudioBuffer>((res, rej) => c.decodeAudioData(b, res, rej))).catch(() => null));
+  }
+  return clipBuf.get(name)!;
+}
+let duckUntil = 0;
+/** Play a recorded jingle. Long jingles dip the background music while they play. */
+export async function playClip(name: Clip, opts: { duck?: boolean; vol?: number } = {}) {
+  if (!getState().settings.sound) return;
+  const c = ac(); if (!c || !sfxBus) return;
+  const buf = await loadClip(name); if (!buf) return;
+  const src = c.createBufferSource(); src.buffer = buf;
+  const g = c.createGain(); g.gain.value = opts.vol ?? 0.9;
+  src.connect(g).connect(sfxBus); src.start();
+  if (opts.duck && musicBus) {
+    const now = c.currentTime, end = now + buf.duration;
+    duckUntil = Math.max(duckUntil, end);
+    const mg = musicBus.gain;
+    mg.cancelScheduledValues(now); mg.setValueAtTime(mg.value, now); mg.linearRampToValueAtTime(0.0001, now + 0.15);
+    mg.setValueAtTime(0.0001, duckUntil); mg.linearRampToValueAtTime(0.32, duckUntil + 1.2);
+  }
+}
+/** Warm the clip cache after the first user gesture so jingles start instantly. */
+export function preloadClips() { (Object.keys(CLIP_URL) as Clip[]).forEach((k) => loadClip(k)); }
+
 export function haptic(pattern: number | number[] = 10) {
   if (!getState().settings.haptics) return;
   try { navigator.vibrate?.(pattern); } catch { /* ignore */ }
@@ -186,6 +218,7 @@ export function unlockAudio() {
   if (unlocked) return;
   const c = ac(); if (!c) return;
   unlocked = true;
+  setTimeout(preloadClips, 500);
   const want = current; current = null;
   if (want) music(want as keyof typeof T);
 }

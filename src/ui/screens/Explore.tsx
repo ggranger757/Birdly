@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Leaflet from 'leaflet';
 import { useNav } from '../nav';
-import { useGame, counts, claimChallenge, refreshChallenges, setRegion, speciesOf } from '../../app/store';
+import { useGame, counts, refreshChallenges, setRegion } from '../../app/store';
 import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs } from '../../data/provider';
-import { likelyNow, RARITY_META } from '../../core/rarity';
+import { likelyNow } from '../../core/rarity';
 import { sunTimes, dayPhase, DayPhase } from '../../core/sun';
 import { liveStreak, dayKey, rankFor } from '../../core/xp';
-import { challengeProgress } from '../../core/challenges';
 import { fetchWeather, Weather } from '../../app/net';
 import { renderFrames, defaultParts } from '../../core/pixel/sprite';
-import { frameImage, Icon, Meter, RarityTag, Sheet } from '../components';
+import { frameImage, Icon, RarityTag, Sheet } from '../components';
+import { FeatherChip } from '../kit';
 import { BirdThumb, Types, dexNo } from '../game';
 import { sfx, music } from '../../app/audio';
 import { RegionPicker } from './RegionPicker';
@@ -67,7 +67,6 @@ function BirdMap({ regionCode, onOpen }: { regionCode: string; onOpen: (sp: Spec
       Lf.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         subdomains: 'abcd', maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a> · sightings: <a href="https://www.inaturalist.org">iNaturalist</a>',
       }).addTo(m);
-      Lf.control.zoom({ position: 'bottomright' }).addTo(m);
       layer.current = Lf.layerGroup().addTo(m);
       map.current = m;
       m.on('popupopen', (e: any) => {
@@ -120,15 +119,15 @@ function BirdMap({ regionCode, onOpen }: { regionCode: string; onOpen: (sp: Spec
   return (
     <div className="map-wrap">
       <div ref={box} style={{ position: 'absolute', inset: 0 }} role="region" aria-label="Map of recent bird sightings" />
-      <div className="map-overlay" style={{ left: 12, bottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '70%' }}>
+      <div className="map-overlay" style={{ left: 10, top: 'calc(54px + var(--safe-t))', display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '75%' }}>
         {state === 'loading' && <span className="chip">Scanning for birds…</span>}
-        {state === 'ok' && <span className="chip sun">{info.n} sightings · 30 days</span>}
-        {state === 'ok' && info.hidden > 0 && <span className="chip">{info.hidden} sensitive hidden</span>}
+        {state === 'ok' && <span className="chip sun">{info.n} sightings nearby · 30 days</span>}
+        {state === 'ok' && info.hidden > 0 && <span className="chip" style={{ background: 'rgba(10,12,15,.88)' }}>{info.hidden} sensitive hidden</span>}
         {state === 'offline' && <span className="chip">Offline — map needs a connection</span>}
         {state === 'error' && <span className="chip">Couldn’t load sightings</span>}
       </div>
-      <button className="btn primary small map-overlay" style={{ right: 12, top: 12 }} onClick={locate} aria-label="Find birds near me">
-        <Icon name="map" size={16} color="var(--accent-ink)" /> Near me
+      <button className="btn primary small map-overlay" style={{ right: 10, top: 'calc(10px + var(--safe-t))', minHeight: 36 }} onClick={locate} aria-label="Find birds near me">
+        <Icon name="map" size={14} color="var(--accent-ink)" /> Near me
       </button>
     </div>
   );
@@ -143,88 +142,73 @@ export function Explore() {
   const phase = dayPhase(now, sunTimes(now, region.lat, region.lng));
   const [wx, setWx] = useState<Weather | null>(null);
   const [pickRegion, setPickRegion] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => { fetchWeather(region).then(setWx); refreshChallenges(new Date()); }, [st.region]);
   useEffect(() => { music('explore'); }, []);
 
   const entries = regionEntries(st.region);
   const caught = new Set(st.sightings.filter(counts).map((s) => s.speciesId));
   const have = entries.filter((e) => caught.has(e.sp.id)).length;
-  const likely = useMemo(() => likelyNow(region, now, st.habitat, wx ?? undefined).slice(0, 6), [st.region, status, wx, phase]);
+  const likely = useMemo(() => likelyNow(region, now, st.habitat, wx ?? undefined).slice(0, 12), [st.region, status, wx, phase]);
   const fallback = usingSeedFallback(st.region);
   const streak = liveStreak(st.streak, dayKey(now));
   const rank = rankFor(st.xp);
-  const open = (sp: Species) => nav.open({ name: 'species', id: sp.id });
+  const openSp = (sp: Species) => nav.open({ name: 'species', id: sp.id });
 
   return (
-    <div className="screen" style={{ paddingTop: 0 }}>
-      <BirdMap regionCode={st.region} onOpen={open} />
-      <div className="row between" style={{ margin: '12px 0' }}>
-        <button className="row" style={{ background: 'none', border: 0, padding: 0, textAlign: 'left' }} onClick={() => nav.setTab('you')}>
-          <span className="chip sun">Lv {rank.index + 1}</span><span className="px small">{st.trainerName || 'Trainer'}</span>
+    <div className="explore">
+      <BirdMap regionCode={st.region} onOpen={openSp} />
+      {/* HUD: who you are, streak, money */}
+      <div className="hud" style={{ right: 110 }}>
+        <button className="chip" onClick={() => nav.setTab('you')} aria-label={`Trainer ${st.trainerName}, level ${rank.index + 1}`}>
+          <b style={{ color: 'var(--accent)', fontWeight: 400 }}>Lv{rank.index + 1}</b> {st.trainerName || 'Trainer'}
         </button>
-        <div className="row" style={{ gap: 6 }}>
-          <span className="chip" aria-label={`${streak.days}-day streak`}><Icon name="flame" size={12} color={streak.days ? 'var(--oriole)' : 'var(--ash)'} />{streak.days}</span>
-          <span className="chip" aria-label={`${st.feathers} feathers`}><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span>
-        </div>
+        <span className="chip" aria-label={`${streak.days}-day streak`}><Icon name="flame" size={12} color={streak.days ? 'var(--oriole)' : 'var(--ash)'} />{streak.days}</span>
+        <FeatherChip />
       </div>
 
-      <button className="panel" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => { sfx.tap(); setPickRegion(true); }} aria-label={`Region: ${regionLabel(st.region)}. Change region`}>
-        <div className="row between">
-          <span className="row"><span style={{ fontSize: 28 }} aria-hidden>{region.flag}</span>
-            <span><b>{region.name}</b>{region.name !== region.countryName && <><br /><span className="small muted">{region.countryName}</span></>}</span></span>
-          <span className="small" style={{ color: 'var(--accent)' }}>Change ›</span>
-        </div>
-        <div className="row between small mt8"><span>BirdDex</span><span className="num">{have} / {entries.length}</span></div>
-        <Meter value={have} max={Math.max(1, entries.length)} tone="sun" label="Regional BirdDex" />
-        <div className="small muted mt8">
-          {status === 'loading' ? 'Updating the local bird list from iNaturalist…'
-            : fallback ? `Offline list: using curated birds from ${getRegion(fallback).name} until the live list loads.`
-              : `${entries.length} species recorded here (iNaturalist research-grade).`}
-          {wx ? ` · ${wx.label}${wx.tempC !== undefined ? ` ${wx.tempC}°C` : ''}` : ''}
-        </div>
-      </button>
-      <p className="small" style={{ marginTop: -6 }}>{PHASE_LINE[phase]}</p>
-
-      <section className="panel" aria-labelledby="likely-h">
-        <h3 id="likely-h" className="label mb8">Likely here now</h3>
-        {likely.map(({ sp, rarity, dex }) => (
-          <button key={sp.id} className="srow" onClick={() => open(sp)}>
-            <BirdThumb sp={sp} size={52} />
-            <span className="grow">
-              <span className="dexno">{dexNo(dex)}</span> <span className="name">{caught.has(sp.id) ? sp.common : sp.common}</span><br />
-              <span className="row" style={{ gap: 6, display: 'inline-flex', marginTop: 2 }}><Types sp={sp} /> <RarityTag rarity={rarity} showLabel={false} /></span>
-            </span>
-            {caught.has(sp.id) ? <span className="px small" style={{ color: 'var(--accent)' }}>✓</span> : <span className="px small muted">NEW</span>}
-          </button>
-        ))}
-      </section>
-      <button className="btn primary big block" onClick={() => { sfx.select(); nav.open({ name: 'viewfinder' }); }}><Icon name="photo" size={20} color="var(--accent-ink)" /> Catch a bird</button>
-
-      <section className="panel mt16" aria-labelledby="q-h">
-        <div className="row between"><h3 id="q-h" className="label">Daily quests</h3><button className="link" onClick={() => nav.open({ name: 'challenges' })}>All quests</button></div>
-        {st.challenges.daily.map((slot) => {
-          const p = challengeProgress(st, slot, now);
-          return (
-            <div key={slot.id} className="mt8">
-              <div className="row between small"><span>{p.label}</span>
-                {p.done && !slot.claimed ? <button className="btn small primary" onClick={() => { const xp = claimChallenge(slot); sfx.levelUp(); nav.toast(`Quest complete! +${xp} XP`); }}>Claim</button>
-                  : <span className="num">{slot.claimed ? '✓' : `${p.progress}/${p.goal}`}</span>}
-              </div>
-              <Meter value={p.progress} max={p.goal} tone="river" label={p.label} />
+      <div className="drawer" style={{ height: open ? '72%' : 228 }}>
+        <button className="grab" onClick={() => { sfx.move(); setOpen(!open); }} aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} style={{ border: 0, minHeight: 4, padding: 0 }} />
+        <div className="drawer-body">
+          <div className="row between" style={{ marginBottom: 8 }}>
+            <button className="row" style={{ background: 'none', border: 0, padding: 0, color: 'inherit', textAlign: 'left', minHeight: 44 }} onClick={() => { sfx.tap(); setPickRegion(true); }} aria-label={`Region ${regionLabel(st.region)}. Change`}>
+              <span style={{ fontSize: 24 }} aria-hidden>{region.flag}</span>
+              <span><b>{region.name}</b> <span className="small" style={{ color: 'var(--accent)' }}>▾</span><br />
+                <span className="small muted">{wx ? `${wx.label}${wx.tempC !== undefined ? ` ${wx.tempC}°C` : ''} · ` : ''}{PHASE_LINE[phase].split(' — ')[0]}</span></span>
+            </button>
+            <button className="chip" onClick={() => nav.setTab('dex')} aria-label={`BirdDex ${have} of ${entries.length}`}>Dex {have}/{entries.length}</button>
+          </div>
+          <div className="section-title" style={{ marginTop: 0 }}><span>Likely here now</span><button className="link" style={{ minHeight: 0, padding: 0, fontSize: 13 }} onClick={() => setOpen(!open)}>{open ? 'Less' : 'More'}</button></div>
+          {!open ? (
+            <div className="bird-cards">
+              {likely.map(({ sp, dex }) => (
+                <button key={sp.id} className={`bird-card ${caught.has(sp.id) ? 'caught' : ''}`} onClick={() => openSp(sp)}>
+                  {sp.photo ? <img src={sp.photo} alt="" loading="lazy" /> : <span className="ph" style={{ display: "block", overflow: "hidden" }}><BirdThumb sp={sp} size={84} /></span>}
+                  <span className="dexno">{dexNo(dex)} {caught.has(sp.id) ? <span style={{ color: 'var(--accent)' }}>✓ found</span> : ''}</span>
+                  <span className="nm">{sp.common}</span>
+                </button>
+              ))}
             </div>
-          );
-        })}
-      </section>
-
-      {st.sightings[0] && (
-        <section className="panel">
-          <div className="label mb8">Last catch</div>
-          <button className="srow" onClick={() => nav.open({ name: 'species', id: st.sightings[0].speciesId ?? '_unknown', sightingId: st.sightings[0].id })}>
-            <BirdThumb sp={speciesOf(st.sightings[0])} size={44} />
-            <span className="grow"><span className="name">{speciesOf(st.sightings[0]).common}</span><br /><span className="small muted">Lv {st.sightings[0].level ?? 5} · {RARITY_META[st.sightings[0].rarity].label}</span></span>
-          </button>
-        </section>
-      )}
+          ) : (
+            <>
+              <p className="small" style={{ marginTop: 0 }}>{PHASE_LINE[phase]}</p>
+              {likely.map(({ sp, rarity, dex }) => (
+                <button key={sp.id} className="srow" onClick={() => openSp(sp)}>
+                  <BirdThumb sp={sp} size={52} />
+                  <span className="grow"><span className="dexno">{dexNo(dex)}</span> <span className="name">{sp.common}</span><br />
+                    <span className="row" style={{ gap: 6, display: 'inline-flex', marginTop: 2 }}><Types sp={sp} /> <RarityTag rarity={rarity} showLabel={false} /></span></span>
+                  {caught.has(sp.id) ? <span className="px small" style={{ color: 'var(--accent)' }}>✓</span> : <span className="px small muted">NEW</span>}
+                </button>
+              ))}
+              <p className="small muted mt16">
+                {status === 'loading' ? 'Updating the local bird list from iNaturalist…'
+                  : fallback ? `Offline list: using curated birds from ${getRegion(fallback).name} until the live list loads.`
+                    : `${entries.length} species recorded in ${region.name} (iNaturalist research-grade).`}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
 
       {pickRegion && (
         <Sheet onClose={() => setPickRegion(false)} label="Choose your region">

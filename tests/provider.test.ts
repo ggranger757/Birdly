@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { loadGeo, countries, statesOf, getRegion, nearestState, locateState } from '../src/data/geo';
-import { planFor, speciesFromTaxon, regionEntries, ensureRegion, usingSeedFallback } from '../src/data/provider';
+import { planFor, speciesFromTaxon, regionEntries, ensureRegion, usingSeedFallback, nearbySightings } from '../src/data/provider';
 
 vi.mock('../src/app/db', () => ({ getRef: async () => undefined, putRef: async () => {} }));
 beforeAll(async () => { await loadGeo(); });
@@ -61,5 +61,19 @@ describe('species provider', () => {
     expect(e[2].sp.archetype).toBe('owl');
     expect(e[2].sp.sensitive).toBe(true);
     expect(String((globalThis.fetch as any).mock.calls[1][0])).toContain('place_id=18');
+  });
+
+  it('pins ordinary sightings (taxon_geoprivacy "open") and hides private, obscured and sensitive ones', async () => {
+    const obs = (id: number, name: string, common: string, extra: object = {}) => ({ id, observed_on: '2026-11-14', geojson: { coordinates: [-97.7, 30.2] }, obscured: false, taxon: { id, name, preferred_common_name: common }, ...extra });
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ results: [
+      obs(1, 'Poecile carolinensis', 'Carolina Chickadee', { taxon_geoprivacy: 'open' }),
+      obs(2, 'Egretta thula', 'Snowy Egret', { taxon_geoprivacy: null }),
+      obs(3, 'Tringa solitaria', 'Solitary Sandpiper', { taxon_geoprivacy: 'obscured', obscured: true }),
+      obs(4, 'Buteo jamaicensis', 'Red-tailed Hawk', { taxon_geoprivacy: 'open' }),
+      obs(5, 'Zenaida asiatica', 'White-winged Dove', { geoprivacy: 'private' }),
+    ] }) })) as any;
+    const r = await nearbySightings(30.27, -97.74);
+    expect(r.list.map((o) => o.sp.common)).toEqual(['Carolina Chickadee', 'Snowy Egret']);
+    expect(r.hidden).toBe(3); // obscured sandpiper, sensitive hawk, private dove
   });
 });

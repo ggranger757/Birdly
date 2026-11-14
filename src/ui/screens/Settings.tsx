@@ -122,7 +122,7 @@ export function Settings() {
       {confirm && (
         <Sheet onClose={() => setConfirm(false)} label="Delete everything">
           <h3 className="mb8">Delete your whole journal?</h3>
-          <p className="small">Every catch, photo, sprite, badge and setting on this phone will be erased. This cannot be undone. Download a backup first if you might want it.</p>
+          <p className="small">Every discovery, photo, sprite, badge and setting on this phone will be erased. This cannot be undone. Download a backup first if you might want it.</p>
           <button className="btn danger block" onClick={async () => { await resetAll(); location.reload(); }}>Delete everything</button>
           <button className="btn ghost block mt8" onClick={() => setConfirm(false)}>Keep my journal</button>
         </Sheet>
@@ -154,11 +154,11 @@ export function Debug() {
       <TopBar title="Debug" onBack={nav.back} />
       <div className="screen small" style={{ fontFamily: 'ui-monospace, monospace' }}>
         <div className="label mb8">Last pipeline (ms)</div>
-        <pre className="panel" style={{ whiteSpace: 'pre-wrap' }}>{t ? Object.entries(t).map(([k, v]) => `${k.padEnd(10)} ${v.toFixed(1)}`).join('\n') : 'No catch this session.'}</pre>
+        <pre className="panel" style={{ whiteSpace: 'pre-wrap' }}>{t ? Object.entries(t).map(([k, v]) => `${k.padEnd(10)} ${v.toFixed(1)}`).join('\n') : 'No discovery this session.'}</pre>
         <div className="label mb8">Cache & device</div>
         <pre className="panel">{Object.entries(info).map(([k, v]) => `${k.padEnd(14)} ${v}`).join('\n')}</pre>
         <div className="label mb8">State</div>
-        <pre className="panel">{`sightings ${st.sightings.length}\nxp ${st.xp}\nfeathers ${st.feathers}\nsessions ${st.sessions}\nfirst catch ${st.firstCatchSeconds ?? '–'}s`}</pre>
+        <pre className="panel">{`sightings ${st.sightings.length}\nxp ${st.xp}\nfeathers ${st.feathers}\nsessions ${st.sessions}\nfirst discovery ${st.firstCatchSeconds ?? '–'}s`}</pre>
         <div className="label mb8">Events (local only)</div>
         <pre className="panel" style={{ maxHeight: 240, overflow: 'auto' }}>{st.log.slice(-40).reverse().map((l) => `${l.t.slice(11, 19)} ${l.e} ${l.d !== undefined ? JSON.stringify(l.d) : ''}`).join('\n')}</pre>
       </div>

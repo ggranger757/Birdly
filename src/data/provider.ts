@@ -216,6 +216,10 @@ export async function ensureRegion(code: string, force = false): Promise<void> {
     const m = new Date().getMonth();
     const months = [(m + 11) % 12, m, (m + 1) % 12].map((x) => x + 1).join(',');
     const [year, now] = await Promise.all([getJSON(countsQuery(loc)), getJSON(countsQuery(loc, `&month=${months}`))]);
+    // big regions have more than 500 species: fetch one more page (rare birds) when needed
+    if ((year.total_results ?? 0) > 500) {
+      try { const p2 = await getJSON(countsQuery(loc, '&page=2')); year.results = [...(year.results ?? []), ...(p2.results ?? [])]; } catch { /* first 500 are plenty */ }
+    }
     const taxa: Species[] = []; const seen = new Set<number>();
     for (const row of [...(year.results ?? []), ...(now.results ?? [])]) {
       if (!row.taxon || seen.has(row.taxon.id)) continue;
@@ -250,7 +254,8 @@ export async function nearbySightings(lat: number, lng: number, radiusKm = 12, d
     if (!o.taxon || !o.geojson?.coordinates) continue;
     const sp = speciesFromTaxon(o.taxon);
     // ETH-2: never pin obscured, private or sensitive species (owls, raptors, nests)
-    if (o.obscured || o.geoprivacy === 'obscured' || o.geoprivacy === 'private' || o.taxon_geoprivacy || sp.sensitive) { hidden++; continue; }
+    const priv = (v: unknown) => v === 'obscured' || v === 'private';
+    if (o.obscured || priv(o.geoprivacy) || priv(o.taxon_geoprivacy) || sp.sensitive) { hidden++; continue; }
     registerSpecies([sp]);
     list.push({ id: o.id, sp, lng: o.geojson.coordinates[0], lat: o.geojson.coordinates[1], observedOn: o.observed_on ?? '', place: o.place_guess, photo: o.photos?.[0]?.url?.replace('square', 'small') });
   }
@@ -258,3 +263,14 @@ export async function nearbySightings(lat: number, lng: number, radiusKm = 12, d
 }
 
 export { seedFor };
+
+const summaries = new Map<number, Promise<string | null>>();
+/** Wikipedia summary for a live species (iNaturalist /taxa/{id}); cached per session. */
+export function taxonSummary(id: number): Promise<string | null> {
+  if (!summaries.has(id)) {
+    summaries.set(id, getJSON(`${API}/taxa/${id}?locale=${(navigator.language || 'en').split('-')[0]}`)
+      .then((j) => { const w = j.results?.[0]?.wikipedia_summary as string | undefined; return w ? stripHtml(w).slice(0, 300) : null; })
+      .catch(() => null));
+  }
+  return summaries.get(id)!;
+}

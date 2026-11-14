@@ -47,7 +47,7 @@ export function Sketch() {
     <div className="overlay">
       <TopBar title="Sketch it" onBack={nav.back} backIcon="close" />
       <div className="screen">
-        <p className="small muted" style={{ marginTop: 0 }}>Draw the bird’s shape in three colours. Sketches count as catches at 40% XP.</p>
+        <p className="small muted" style={{ marginTop: 0 }}>Draw the bird’s shape in three colours. Sketches count as discoveries at 40% XP.</p>
         <canvas ref={ref} width={32} height={32} className="pix" style={{ width: '100%', aspectRatio: '1/1', height: 'auto', border: '2px solid var(--ink)', touchAction: 'none' }}
           onPointerDown={(e) => { drawing.current = true; (e.target as HTMLElement).setPointerCapture(e.pointerId); paint(e); }}
           onPointerMove={(e) => drawing.current && paint(e)} onPointerUp={() => (drawing.current = false)} aria-label="32 by 32 drawing grid" />

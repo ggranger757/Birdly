@@ -19,3 +19,6 @@ One line per meaningful choice, with the reason.
 - **Mobile-only layout.** The app is a 480 px column; desktop shows a note to open it on a phone.
 - **Sun times from region centroid (NOAA approx.) placed relative to solar noon.** Fixes sunsets that wrap past UTC midnight; tested across longitudes.
 - **Decor opens at 25 species, second/third scenes at 10 (GAM-8).** As specified; Feathers accumulate meanwhile.
+- **One job per tab (user request).** Explore = find birds (full-screen map + pull-up drawer), BirdDex = collection, Snap = camera, Aviary = care (Birds · Feeder · Decor), Trainer = progress (Quests · Badges · Life list). Quests live only in Trainer; alerts surface where action is needed.
+- **Discovery language (user request).** Birds are found and discovered, never caught: "Discovered!", the Snap Lens records a bird's likeness while the real bird flies on.
+- **Owner-supplied sound clips** for purchases, new BirdDex entries, level-ups/badges and the Snap Lens throw; long jingles duck the music.

@@ -71,6 +71,8 @@ export interface GameState {
   items: { seeds: number; berries: number; worms: number }; // food bags in the pantry
   feeder: { level: number };       // food points in the Aviary feeder
   petDay: string | null;           // last day the aviary paid out Feathers
+  stats: { fills: number; spent: number; quests: number };
+  badgeQueue: string[];            // newly earned badges waiting for their pop-up
 }
 
 export const UNKNOWN: Species = {

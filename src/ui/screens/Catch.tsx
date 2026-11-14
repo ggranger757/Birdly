@@ -13,7 +13,7 @@ import { RGB, CLEAR, IDX, HEX } from '../../core/palette';
 import { rgbToLab, snapToPalette } from '../../core/color';
 import { Sprite, useReducedMotion } from '../components';
 import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, FxHit } from '../game';
-import { sfx, haptic, music } from '../../app/audio';
+import { sfx, haptic, music, playClip } from '../../app/audio';
 import { RANK_LINES } from '../../core/xp';
 import type { Verification } from '../../core/model';
 import { paintSceneThumb } from '../../render/diorama';
@@ -85,8 +85,8 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
         {stage === 'appear' && result && (
           <>
             <Dialog lines={[`A wild ${result.species.common.toUpperCase()} appeared!`]} />
-            <button className="btn primary big block mt8" onClick={() => { sfx.throw(); haptic(15); setStage('throw'); }}>
-              <Capsule size={24} /> Throw Snap Capsule
+            <button className="btn primary big block mt8" onClick={() => { playClip('throw'); haptic(15); setStage('throw'); }}>
+              <Capsule size={24} /> Record with Snap Lens
             </button>
           </>
         )}
@@ -147,8 +147,8 @@ function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; 
 function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: () => void }) {
   const s = result.sighting, sp = result.species;
   const lines = [
-    s.speciesId ? `Caught! ${sp.common.toUpperCase()} was registered in the BirdDex${s.dex ? ` as ${dexNo(s.dex)}` : ''}.` : 'Caught! An unidentified bird joined your BirdDex. Name it later.',
-    ...(s.firstRecord ? ['★ NEW ENTRY! You have never caught this bird before.'] : s.newPlumage ? ['A new plumage! This one looks different from your others.'] : [`You have caught this species ${s.timesSeen} times.`]),
+    s.speciesId ? `Discovered! ${sp.common.toUpperCase()} was recorded in the BirdDex${s.dex ? ` as ${dexNo(s.dex)}` : ''}.` : 'Discovered! An unidentified bird was recorded in your BirdDex. Name it later.',
+    ...(s.firstRecord ? ['★ NEW ENTRY! You have never found this bird before.'] : s.newPlumage ? ['A new plumage! This one looks different from your others.'] : [`You have found this species ${s.timesSeen} times.`]),
     `${sp.common} is Lv ${s.level ?? 5}. You gained ${s.xp} XP and ${s.feathers} Feathers — spend them on food for your feeder.`,
     ...(getState().diorama.birds.includes(s.id) ? [getState().sightings.length === 1 ? 'Your new bird lives in the Aviary now. Keep the feeder filled and it will stay healthy!' : `${sp.common} moved into your Aviary.`] : [`Your Aviary is full, so ${sp.common} is resting in the Bird Box.`]),
     ...(s.sprite.variant !== 'normal' ? [`Incredible — a rare ${s.sprite.variant} bird!`] : []),
@@ -156,7 +156,7 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
       : result.badges.length > 1 ? [`You earned ${result.badges.length} badges: ${result.badges.map((b) => b.name).join(', ')}!`] : []),
     ...(result.rankUp ? [`Trainer level up! ${RANK_LINES[result.rankUp] ?? result.rankUp}`] : []),
   ];
-  useEffect(() => { if (result.rankUp || result.badges.length) setTimeout(sfx.levelUp, 1600); }, []);
+  const played = useRef(false);
   return (
     <>
       {result.badges.length > 0 && (
@@ -164,7 +164,10 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
           {result.badges.map((b) => <span key={b.id} style={{ animation: 'stampin 400ms steps(4)' }}><BadgeIcon icon={b.icon} earned size={56} label={`${b.name} badge`} /></span>)}
         </div>
       )}
-      <Dialog lines={lines}>
+      <Dialog lines={lines} onLine={(i) => {
+      if (played.current) return;
+      if (/badge|level up/i.test(lines[i] ?? '')) { played.current = true; playClip('levelUp', { duck: true }); }
+    }}>
         <button className="btn primary block mt8" onClick={(e) => { e.stopPropagation(); onContinue(); }}>Continue</button>
       </Dialog>
     </>
@@ -235,15 +238,15 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
   useEffect(() => {
     if (stage !== 'throw' || !result) return;
     const n = result.sighting.firstRecord ? 3 : Math.max(1, Math.min(3, Math.round(snapPower / 35)));
-    const [tFly, tOpen, tDrop, tWob] = reduced ? [1, 1, 1, 1] : [650, 420, 380, 700];
+    const [tFly, tOpen, tDrop, tWob] = reduced ? [1, 1, 1, 1] : [560, 420, 380, 700]; // impact lands on the throw sound's hit
     const timers: ReturnType<typeof setTimeout>[] = [];
     setThrowPhase('fly');
-    timers.push(setTimeout(() => { setThrowPhase('open'); sfx.open(); }, tFly));
+    timers.push(setTimeout(() => { setThrowPhase('open'); haptic(20); }, tFly));
     timers.push(setTimeout(() => { setThrowPhase('drop'); sfx.stamp(); }, tFly + tOpen));
     const w0 = tFly + tOpen + tDrop;
     timers.push(setTimeout(() => setThrowPhase('wobble'), w0));
     for (let i = 0; i < n; i++) timers.push(setTimeout(() => { setWob(i + 1); sfx.wobble(); haptic(8); }, w0 + i * tWob));
-    timers.push(setTimeout(() => { setThrowPhase('done'); sfx.click(); haptic([20, 30, 40]); setTimeout(() => sfx.caught(), 250); onThrown(); }, w0 + n * tWob));
+    timers.push(setTimeout(() => { setThrowPhase('done'); sfx.click(); haptic([20, 30, 40]); setTimeout(() => (result.sighting.firstRecord ? playClip('newBird', { duck: true }) : sfx.caught()), 250); onThrown(); }, w0 + n * tWob));
     return () => timers.forEach(clearTimeout);
   }, [stage]);
 

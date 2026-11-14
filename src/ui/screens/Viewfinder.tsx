@@ -102,7 +102,7 @@ export function Viewfinder() {
     if (!f) return;
     const taken = await exifDate(f);
     if (!taken) { setImportErr("That photo has no capture date, so we can't check it's from today. Live photos earn full credit."); return; }
-    if (Date.now() - taken.getTime() > 24 * 3600e3) { setImportErr(`That photo is from ${taken.toLocaleDateString()}. Imports must be from the last 24 hours — this keeps catches honest.`); return; }
+    if (Date.now() - taken.getTime() > 24 * 3600e3) { setImportErr(`That photo is from ${taken.toLocaleDateString()}. Imports must be from the last 24 hours — this keeps discoveries honest.`); return; }
     try {
       const { bmp, w, h } = await fromFile(f);
       const shot = await normalize(bmp, w, h);
@@ -112,7 +112,7 @@ export function Viewfinder() {
   };
 
   const importInput = <input ref={fileRef} type="file" accept="image/jpeg,image/*" hidden onChange={(e) => onImport(e.target.files?.[0])} />;
-  const importNote = <p className="small muted">Imports earn 50% XP, no Fieldcraft credit, and are tagged “Archived”. Only photos taken in the last 24 hours are accepted. This keeps catches honest while still letting you use a better camera.</p>;
+  const importNote = <p className="small muted">Imports earn 50% XP, no Fieldcraft credit, and are tagged “Archived”. Only photos taken in the last 24 hours are accepted. This keeps discoveries honest while still letting you use a better camera.</p>;
 
   if (cam === 'ask') {
     return (
@@ -120,7 +120,7 @@ export function Viewfinder() {
         <TopBar title="Field Mode" onBack={nav.back} backIcon="close" />
         <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
           <Icon name="photo" size={64} color="var(--accent)" />
-          <h2>BirdlyQuest needs your camera to catch real birds.</h2>
+          <h2>BirdlyQuest needs your camera to discover real birds.</h2>
           <p className="muted small">Photos stay on this phone. Location is never read from them.</p>
           <button className="btn primary big block" onClick={start}>Allow camera</button>
           <button className="btn ghost block" onClick={() => nav.replace({ name: 'sketch' })}>Sketch it instead</button>

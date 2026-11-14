@@ -32,6 +32,7 @@ export function freshState(): GameState {
     sessions: 0, lastSession: null, backupPromptAfter: null, firstCatchSeconds: null, installStartedAt: now, log: [],
     trainerName: '', partner: null, speciesDefs: {},
     items: { seeds: 0, berries: 0, worms: 0 }, feeder: { level: 60 }, petDay: null,
+    stats: { fills: 0, spent: 0, quests: 0 }, badgeQueue: [],
   };
 }
 
@@ -63,7 +64,7 @@ export function logEvent(e: string, d?: unknown) {
 }
 
 function adopt(saved: GameState | undefined) {
-  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings }, items: { ...freshState().items, ...(saved.items ?? {}) }, feeder: saved.feeder ?? freshState().feeder };
+  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings }, items: { ...freshState().items, ...(saved.items ?? {}) }, feeder: saved.feeder ?? freshState().feeder, stats: { ...freshState().stats, ...(saved.stats ?? {}) }, badgeQueue: saved.badgeQueue ?? [] };
 }
 
 export async function initStore() {
@@ -84,6 +85,7 @@ export async function initStore() {
   registerSpecies(Object.values(state.speciesDefs ?? {}));
   ensureRegion(state.region).catch(() => {});
   try { tickFeeder(); } catch { /* ignore */ }
+  setTimeout(() => { try { awardBadges(); } catch { /* ignore */ } }, 1500); // retroactive awards for new achievements
   const today = dayKey(new Date());
   if (state.lastSession !== today || state.sessions === 0) state = { ...state, sessions: state.sessions + 1, lastSession: today };
   refreshChallenges(new Date(), false);
@@ -245,6 +247,7 @@ export function identifySighting(id: string, speciesId: string, verification: Ve
 
 export function updateNote(id: string, note: string) {
   setState((s) => ({ ...s, sightings: s.sightings.map((x) => (x.id === id ? { ...x, note: note.slice(0, 280) } : x)) }));
+  after(0);
 }
 
 export async function deletePhotoKeepSprite(id: string) {
@@ -273,12 +276,13 @@ export function claimChallenge(slot: ChallengeSlot) {
     ...s, xp: s.xp + def.xp, feathers: s.feathers + Math.round(def.xp / 10),
     challenges: { ...s.challenges, daily: s.challenges.daily.map((d) => mark(d)!), weekly: mark(s.challenges.weekly), seasonal: mark(s.challenges.seasonal) },
   }));
+  setState((s) => ({ ...s, stats: { ...s.stats, quests: s.stats.quests + 1 } }));
   logEvent('challenge_claim', slot.id);
-  return def.xp;
+  return after(def.xp);
 }
 
 export function recordSitSpot() { setState((s) => ({ ...s, events: { ...s.events, sitSpots: [...s.events.sitSpots.slice(-30), dayKey(new Date())] } })); }
-export function recordShare() { setState((s) => ({ ...s, events: { ...s.events, shares: [...s.events.shares.slice(-30), dayKey(new Date())] } })); logEvent('share_created'); }
+export function recordShare() { setState((s) => ({ ...s, events: { ...s.events, shares: [...s.events.shares.slice(-30), dayKey(new Date())] } })); logEvent('share_created'); after(0); }
 
 export function toggleHabitatBird(id: string): boolean {
   const has = state.diorama.birds.includes(id);
@@ -289,13 +293,14 @@ export function toggleHabitatBird(id: string): boolean {
     diorama: { ...s.diorama, birds: has ? s.diorama.birds.filter((b) => b !== id) : [...s.diorama.birds, id] },
     sightings: s.sightings.map((x) => (x.id === id ? (has ? rest(x, now) : wake(x, now)) : x)),
   }));
+  after(0);
   return true;
 }
 
 export function buyDecor(key: string, price: number): boolean {
   if (state.feathers < price || state.ownedDecor.includes(key)) return false;
-  setState((s) => ({ ...s, feathers: s.feathers - price, ownedDecor: [...s.ownedDecor, key] }));
-  return true;
+  setState((s) => ({ ...s, feathers: s.feathers - price, ownedDecor: [...s.ownedDecor, key], stats: { ...s.stats, spent: s.stats.spent + price } }));
+  return after(true);
 }
 
 export function placeDecor(slot: string, key: string | null) {
@@ -354,23 +359,39 @@ export function setPartner(sp: Species) {
   setState((s) => ({ ...s, partner: { speciesId: sp.id, parts }, speciesDefs: sp.id.startsWith('inat-') ? { ...s.speciesDefs, [sp.id]: sp } : s.speciesDefs }));
 }
 
+// ─── achievements outside of discoveries ───
+/** Award any newly met badges (Feathers included) and queue a pop-up for each. */
+export function awardBadges(): Badge[] {
+  const earned = newlyEarned(state);
+  if (!earned.length) return [];
+  const now = new Date().toISOString();
+  setState((s) => {
+    const badges = { ...s.badges }; let bonus = 0;
+    for (const b of earned) { badges[b.id] = now; bonus += TIER_FEATHERS[b.tier]; }
+    return { ...s, badges, feathers: s.feathers + bonus, badgeQueue: [...s.badgeQueue, ...earned.map((b) => b.id)] };
+  });
+  return earned;
+}
+export function shiftBadgeQueue() { setState((s) => ({ ...s, badgeQueue: s.badgeQueue.slice(1) })); }
+const after = <T,>(v: T): T => { setTimeout(awardBadges, 0); return v; };
+
 // ─── pets & feeder ───
 export const inAviary = (id: string) => state.diorama.birds.includes(id);
 
 export function buyFood(food: Food, qty = 1): boolean {
   const cost = FOODS[food].price * qty;
   if (state.feathers < cost) return false;
-  setState((s) => ({ ...s, feathers: s.feathers - cost, items: { ...s.items, [food]: s.items[food] + qty } }));
+  setState((s) => ({ ...s, feathers: s.feathers - cost, items: { ...s.items, [food]: s.items[food] + qty }, stats: { ...s.stats, spent: s.stats.spent + cost } }));
   logEvent('buy_food', food);
-  return true;
+  return after(true);
 }
 
 /** Pour one bag from the pantry into the feeder. Returns points added (0 if full or no bag). */
 export function fillFeeder(food: Food): number {
   if (state.items[food] <= 0 || state.feeder.level >= FEEDER_CAP) return 0;
   const add = Math.min(FOODS[food].points, FEEDER_CAP - state.feeder.level);
-  setState((s) => ({ ...s, items: { ...s.items, [food]: s.items[food] - 1 }, feeder: { level: s.feeder.level + add } }));
-  return add;
+  setState((s) => ({ ...s, items: { ...s.items, [food]: s.items[food] - 1 }, feeder: { level: s.feeder.level + add }, stats: { ...s.stats, fills: s.stats.fills + 1 } }));
+  return after(add);
 }
 
 /** Hungry Aviary birds eat from the feeder. Call often; it only changes state when someone eats. */
@@ -382,7 +403,7 @@ export function tickFeeder(now = new Date()): Meal[] {
   if (!r.meals.length) return [];
   const by = new Map(r.birds.map((b) => [b.id, b]));
   setState((s) => ({ ...s, feeder: { level: r.level }, sightings: s.sightings.map((x) => by.get(x.id) ?? x) }));
-  return r.meals;
+  return after(r.meals);
 }
 
 /** Once a day, each healthy Aviary bird brings you 2 Feathers. */

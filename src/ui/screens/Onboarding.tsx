@@ -26,7 +26,7 @@ export function Boot({ onDone }: { onDone: () => void }) {
       <SceneBackdrop opacity={0.55} />
       <div style={{ animation: reduced ? undefined : 'bob 900ms steps(2) infinite' }}><Sprite species={SPECIES_BY_ID.norcar} scale={4} mode="fly" /></div>
       <h1 className="title-logo">BIRDLY<b>QUEST</b></h1>
-      <p className="small" style={{ margin: 0, textShadow: '1px 1px 0 #000' }}>Catch real birds with your camera.</p>
+      <p className="small" style={{ margin: 0, textShadow: '1px 1px 0 #000' }}>Discover real birds with your camera.</p>
       <p className="press mt24">TAP TO START</p>
     </div>
   );
@@ -55,8 +55,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
         <Dialog speaker="Professor Rowan" lines={[
           'Welcome, traveller, to the world of BIRDS! I am Rowan, druid of the old woods.',
           'Real wild birds live all around you — in parks, on rooftops, by the water.',
-          'Snap a photo of one with BirdlyQuest, and it is caught: it joins your BirdDex as a pixel companion.',
-          'Every bird you catch is drawn from YOUR photo. No two trainers have the same birds.',
+          'Snap a photo of one and it is discovered: it joins your BirdDex as a pixel companion, while the real bird flies on.',
+          'Every bird you discover is drawn from YOUR photo. No two explorers have the same birds.',
           'Now then… what should I call you?',
         ]} onDone={() => setStep('name')} />
       </div>
@@ -95,7 +95,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}><Capsule size={72} /></div>
       <Dialog speaker="Professor Rowan" lines={[
         `${r.flag ?? ''} ${regionLabel(region)}. Splendid birding country!`,
-        'Here are your Snap Capsules. Point your camera at a real bird and press the shutter.',
+        'Here is your Snap Lens. Point your camera at a real bird and press the shutter to record it.',
         'Fill your BirdDex, earn badges, and grow your Aviary. Your quest begins now!',
       ]} onDone={() => {
         setState((s) => ({ ...s, onboarded: true, diorama: { ...s.diorama, biome: s.habitat } }));
@@ -134,7 +134,7 @@ function PartnerPick({ region, onDone }: { region: string; onDone: () => void })
       <button className="btn primary big block mt16" disabled={!pick} onClick={() => { if (pick) { setPartner(pick); sfx.caught(); onDone(); } }}>
         {pick ? `Choose ${pick.common}` : 'Pick a partner'}
       </button>
-      <p className="small muted">Your partner is a gift, not a catch. Your BirdDex fills only with birds you photograph.</p>
+      <p className="small muted">Your partner is a gift, not a discovery. Your BirdDex fills only with birds you photograph.</p>
     </div>
   );
 }

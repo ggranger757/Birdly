@@ -106,7 +106,7 @@ export async function renderShareCard(s: ReturnType<typeof Object>, sp: any, nam
   g.font = 'italic 28px Inter'; g.fillStyle = '#4a4660'; if (sp.sci) g.fillText(sp.sci, W * 0.75 - 30, 790);
   g.font = '28px Inter'; g.fillStyle = '#14121F'; g.fillText(`${RARITY_META[s.rarity as keyof typeof RARITY_META].glyph} ${RARITY_META[s.rarity as keyof typeof RARITY_META].label}`, W * 0.75 - 30, 840);
   if (note) { g.font = 'italic 28px Inter'; g.fillStyle = '#2B2440'; wrap(g, note, W * 0.75 - 30, 910, 400, 38); }
-  g.textAlign = 'left'; g.font = '24px Silkscreen'; g.fillStyle = '#B9BCC9'; g.fillText('CATCH REAL BIRDS WITH YOUR CAMERA', 60, 1260);
+  g.textAlign = 'left'; g.font = '24px Silkscreen'; g.fillStyle = '#B9BCC9'; g.fillText('DISCOVER REAL BIRDS WITH YOUR CAMERA', 60, 1260);
   return new Promise((res) => c.toBlob((b) => res(b!), 'image/png'));
 }
 

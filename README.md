@@ -1,14 +1,14 @@
 # BirdlyQuest
 
-*Catch real birds with your camera.*
+*Discover real birds with your camera.*
 
-A mobile-only, offline-capable PWA collecting game. Go outside, photograph a **real** bird, and it is caught: a monster-collector-style encounter plays, your photo is turned on-device into a 32×32 pixel sprite, and the bird joins your BirdDex and Aviary as a pet that needs feeding.
+A mobile-only, offline-capable PWA collecting game. Go outside, photograph a **real** bird, and it is discovered: an encounter plays, your photo is turned on-device into a 32×32 pixel sprite, and the bird joins your BirdDex and Aviary as a pet that needs feeding.
 
 - **Anywhere on Earth**: pick any country and state/province (or use your location). The local BirdDex comes live from iNaturalist research-grade records for that place; a curated list works offline.
 - **Explore map**: real map with recent nearby bird sightings as pixel pins (sensitive species are never pinned).
-- **Encounter & capture**: wild-bird encounter, identify from a likely-species menu, throw a Snap Capsule, wobble, Caught! Dex numbers, bird types, levels.
-- **Pets & the feeder**: birds living in your Aviary (up to 12) slowly get hungry and fly to the bird feeder to eat. Buy food bags with Feathers (earned by catching real birds, quests and badges) and pour them into the feeder; when it runs empty, birds go hungry. Extra birds rest in the Bird Box and don't need food. Birds never die; hungry birds are just weak.
-- **Trainer**: partner bird, trainer card, 24 badges, daily/weekly/seasonal quests, original chiptune music and SFX.
+- **Encounter & discovery**: wild-bird encounter, identify from a likely-species menu, record it with the Snap Lens, Discovered! Dex numbers, bird types, levels.
+- **Pets & the feeder**: birds living in your Aviary (up to 12) slowly get hungry and fly to the bird feeder to eat. Buy food bags with Feathers (earned by discovering real birds, quests and badges) and pour them into the feeder; when it runs empty, birds go hungry. Extra birds rest in the Bird Box and don't need food. Birds never die; hungry birds are just weak.
+- **Trainer**: partner bird, trainer card, 48 achievements in 7 categories (with a pop-up when earned), daily/weekly/seasonal quests, original chiptune music and SFX.
 
 ## Run it on GitHub Pages
 
@@ -31,21 +31,12 @@ npm run icons        # regenerate PWA icons from the sprite pipeline
 
 A sprite lab (every species, every animation frame, silhouette test) lives at `#/lab` or Settings → Sprite lab. Five taps on the version line in Settings opens the debug panel (pipeline timings, storage, event log).
 
-## What's in v1
+## Custom art & sound
 
-- **Onboarding** — guest-first, region picker (9 seed regions, optional "use my location" that discards coordinates), patch picker, guaranteed starter bird. First sprite in ~10 s / 6 taps.
-- **Window Mode & Sit Spot** — layered parallax scenes chosen by habitat and the region's real sun position; Poisson arrivals weighted by Likely Now Score; tap-to-focus, shutter, reveal.
-- **Field Mode** — live camera, 1:1 framing, thirds grid, tap-to-focus, exposure, zoom, top-5 shortlist with real reference photos, distance cue, gallery import (EXIF ≤24 h, 50% XP), Sketch mode when the camera is unavailable.
-- **Photo → pixel pipeline** (Web Worker) — subject isolation, CIELAB k-means, ΔE2000 snapping to FIELD 32, 12 archetypes × 14 animation frames (idle breathing, blink, tail flick, peck, hop, 6-frame flight), pattern masks, selective outline, rare natural variants seeded from the photo hash.
-- **Fieldcraft score** — sharpness, exposure, subject size, framing, separation, with two lines of coaching.
-- **Journal** — silhouettes with habitat hints, filters/sorts, 3 progress meters, species cards with real CC-licensed reference photos (iNaturalist), plumage records, journal spread with notes, shareable card.
-- **Progression** — XP and 9 ranks, streaks with freeze tokens, 24 badges, daily/weekly/seasonal challenges, Feathers and habitat decor, Year in Birds.
-- **Map** (region atlas, no pins), **Habitat** diorama, **You** tab, settings, backups.
-
-## Custom art
+- `public/sfx/`: owner-supplied sound clips: `buy.mp3` (purchases), `new-bird.mp3` (new BirdDex entry), `level-up.mp3` (trainer level-up and badges), `throw.mp3` (Snap Lens throw). Long jingles dip the background music while they play.
 
 - `public/bg/`: layered parallax backgrounds (owner-supplied).
-- `public/badges/`: badge icons and capture effect (owner-supplied).
+- `public/badges/`: 24 owner-supplied badge icons + capture effect, and 24 generated achievement badges (`b-*.png`). Regenerate or edit the generated ones with `python3 scripts/gen-badges.py` (frames per category, metals per tier, ASCII-art emblems).
 - `public/prof/druid.png`: **add the professor sprite sheet here.** Frames are detected automatically (rows and frames separated by empty space; a solid background colour is keyed out) and the first row plays as the idle animation. Until the file exists an owl stands in.
 
 ## Data, privacy and licensing

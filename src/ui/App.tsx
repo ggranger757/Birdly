@@ -14,10 +14,11 @@ import { Sketch } from './screens/Sketch';
 import { Settings, Debug, Lab } from './screens/Settings';
 import { sfx } from '../app/audio';
 import { challengeProgress } from '../core/challenges';
+import { BadgePopup } from './BadgePopup';
 
 const TABS: { id: Tab | 'camera'; label: string; icon: string }[] = [
   { id: 'explore', label: 'Explore', icon: 'map' }, { id: 'dex', label: 'BirdDex', icon: 'journal' },
-  { id: 'camera', label: 'Catch', icon: 'photo' },
+  { id: 'camera', label: 'Snap', icon: 'photo' },
   { id: 'aviary', label: 'Aviary', icon: 'habitat' }, { id: 'you', label: 'Trainer', icon: 'you' },
 ];
 
@@ -99,7 +100,7 @@ export function App() {
         </main>
         <nav className="tabbar" aria-label="Main">
           {TABS.map((t) => t.id === 'camera' ? (
-            <button key="cam" className="tab cam" onClick={() => { sfx.select(); nav.open({ name: 'viewfinder' }); }} aria-label="Catch a bird with the camera">
+            <button key="cam" className="tab cam" onClick={() => { sfx.select(); nav.open({ name: 'viewfinder' }); }} aria-label="Snap a bird with the camera">
               <span className="cam-btn"><Icon name="photo" size={28} color="var(--accent-ink)" /></span>
             </button>
           ) : (
@@ -111,6 +112,7 @@ export function App() {
           ))}
         </nav>
         {stack.map((r, i) => <div key={i} style={{ display: 'contents' }} aria-hidden={i < stack.length - 1}>{renderRoute(r)}</div>)}
+        <BadgePopup blocked={stack.some((r) => r.name === 'catch')} />
         {toast && <Toast text={toast} onDone={() => setToast(null)} />}
       </div>
       <p className="desk-note"><b>BIRDLYQUEST</b> is built for phones. Open this page on your phone and add it to your home screen to play.</p>
@@ -126,7 +128,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { err: Err
     return (
       <div className="app"><div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
         <h2>BirdlyQuest tripped over a branch.</h2>
-        <p className="small">Your BirdDex is safe — it is saved on this phone after every catch. Reload to carry on.</p>
+        <p className="small">Your BirdDex is safe — it is saved on this phone after every discovery. Reload to carry on.</p>
         <pre className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{String(this.state.err.message).slice(0, 300)}</pre>
         <button className="btn primary big block" onClick={() => location.reload()}>Reload</button>
       </div></div>

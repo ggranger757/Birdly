@@ -26,6 +26,7 @@ export async function fetchWeather(r: Region): Promise<Weather | null> {
     clearTimeout(t);
     if (!res.ok) return null;
     const j = await res.json();
+    if (j.error || !j.current) return null; // quota exceeded or bad response: just show no weather
     const code = j.current?.weather_code as number;
     const m = WMO.find(([codes]) => codes.includes(code));
     const w: Weather = { weather: m?.[1] ?? 'cloud', label: m?.[2] ?? 'Mixed', tempC: Math.round(j.current?.temperature_2m), fetchedAt: Date.now() };
