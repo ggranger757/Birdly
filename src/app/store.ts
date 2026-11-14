@@ -414,7 +414,7 @@ export function claimChapter(id: string, reward: number): boolean {
 /** Buy a Snap Lens with Feathers and put it on. */
 export function buyLens(id: LensId): boolean {
   const l = LENSES[id];
-  if (!l || state.lenses.includes(id) || state.feathers < l.price) return false;
+  if (!l || state.lenses.includes(id) || state.feathers < l.price || trainerLevel(state.xp).level < l.level) return false;
   setState((s) => ({ ...s, feathers: s.feathers - l.price, lenses: [...s.lenses, id], lens: id, stats: { ...s.stats, spent: s.stats.spent + l.price } }));
   logEvent('buy_lens', id);
   return after(true);

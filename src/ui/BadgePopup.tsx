@@ -5,6 +5,8 @@ import { BadgeIcon } from './game';
 import { playClip, haptic } from '../app/audio';
 
 const TIER_COL: Record<string, string> = { bronze: '#C2622F', silver: '#B6C0C9', gold: '#F2C14E', platinum: '#9FD3E0' };
+// lighter versions for text on the dark card (WCAG AA)
+const TIER_TEXT: Record<string, string> = { bronze: 'var(--tier-bronze)', silver: 'var(--tier-silver)', gold: 'var(--tier-gold)', platinum: 'var(--tier-platinum)' };
 
 /** "Badge earned!" moment for achievements earned outside the discovery sequence. */
 export function BadgePopup({ blocked }: { blocked: boolean }) {
@@ -14,11 +16,16 @@ export function BadgePopup({ blocked }: { blocked: boolean }) {
   useEffect(() => setCopied(false), [id]);
   useEffect(() => { if (b && !blocked) { playClip('levelUp', { duck: true }); haptic([15, 40, 15, 40, 30]); } }, [b?.id, blocked]);
   useEffect(() => { if (id && !b) shiftBadgeQueue(); }, [id]);
+  useEffect(() => {
+    if (!b || blocked) return;
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); shiftBadgeQueue(); } };
+    window.addEventListener('keydown', k, true); return () => window.removeEventListener('keydown', k, true);
+  }, [b?.id, blocked]);
   if (!b || blocked) return null;
   return (
     <div className="badge-pop" role="dialog" aria-modal="true" aria-label={`Badge earned: ${b.name}`} onClick={shiftBadgeQueue}>
       <div className="badge-pop-card" onClick={(e) => e.stopPropagation()} style={{ borderColor: TIER_COL[b.tier] }}>
-        <div className="label" style={{ color: TIER_COL[b.tier] }}>Badge earned!</div>
+        <div className="label" style={{ color: TIER_TEXT[b.tier] }}>Badge earned!</div>
         <div className="badge-pop-icon"><BadgeIcon icon={b.icon} earned size={128} label={b.name} /></div>
         <h2 style={{ fontSize: 18 }}>{b.name}</h2>
         <p className="small" style={{ margin: '6px 0' }}>{b.desc}</p>

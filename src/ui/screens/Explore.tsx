@@ -210,7 +210,7 @@ export function Explore() {
           <b style={{ color: 'var(--accent)', fontWeight: 400 }}>Lv{trainerLevel(st.xp).level}</b> {st.trainerName || 'Trainer'}
         </button>
         <span className="chip" aria-label={`${streak.days}-day streak`}><Icon name="flame" size={12} color={streak.days ? 'var(--oriole)' : 'var(--ash)'} />{streak.days}</span>
-        <FeatherChip />
+        <FeatherChip label={false} />
       </div>
 
       <div className="drawer" style={{ height: open ? '72%' : 276 }}>

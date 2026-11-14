@@ -158,34 +158,38 @@ function FxSheet({ src, fw, fh, frames, fps, scale, delay = 0, style }: { src: s
 /** The equipped Snap Lens's recording effect, centred on (0,0) of its parent. */
 export function LensFx({ lens, size = 140 }: { lens?: string; size?: number }) {
   const L = lensOf(lens); const { fx } = L;
-  if (L.pattern === 'single') {
-    const sc = size / Math.max(fx.fw, fx.fh);
-    return <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}><FxSheet {...fx} scale={sc} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} /></div>;
-  }
-  if (L.pattern === 'ring3') {
-    const sc = Math.max(2, Math.round(size / 3 / fx.fw)), r = size * 0.38;
-    return (
-      <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
-        {[0, 120, 240].map((a, i) => (
-          <div key={a} style={{ position: 'absolute', left: Math.cos((a - 90) * Math.PI / 180) * r, top: Math.sin((a - 90) * Math.PI / 180) * r, transform: `rotate(${a}deg)` }}>
-            <FxSheet {...fx} scale={sc} delay={i * 70} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} />
-          </div>
-        ))}
-      </div>
-    );
-  }
-  // swarm: bubbles rising from around the bird
-  const sc = Math.max(2, Math.round(size / 40));
-  const spots = [[-50, 20], [-24, -30], [10, 34], [36, -10], [52, 26], [-8, -56], [28, -48], [-46, -18], [0, 0]];
-  return (
-    <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
-      {spots.map(([x, y], i) => (
-        <div key={i} className="fx-rise" style={{ position: 'absolute', left: x * size / 140, top: y * size / 140, animationDelay: `${i * 60}ms` }}>
-          <FxSheet {...fx} fps={6} scale={sc} delay={i * 60} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} />
-        </div>
-      ))}
+  const big = Math.max(fx.fw, fx.fh);
+  const at = (x: number, y: number, sc: number, key: string | number, extra: { delay?: number; rot?: number; filter?: string; cls?: string; style?: React.CSSProperties } = {}) => (
+    <div key={key} className={extra.cls} style={{ position: 'absolute', left: x, top: y, transform: extra.rot ? `rotate(${extra.rot}deg)` : undefined, filter: extra.filter ?? L.filter, ...extra.style }}>
+      <FxSheet {...fx} scale={sc} delay={extra.delay ?? 0} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} />
     </div>
   );
+  const small = Math.max(2, Math.round(size / 3 / big * (fx.fw > 30 ? 1.4 : 1)));
+  const ring = (n: number, r: number, rainbow = false) => Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * 360;
+    return at(Math.cos((a - 90) * Math.PI / 180) * r, Math.sin((a - 90) * Math.PI / 180) * r, small, i,
+      { delay: i * 60, rot: fx.fw < 30 ? a : 0, filter: rainbow ? `hue-rotate(${(i * 360) / n}deg) ${L.filter ?? ''}` : undefined });
+  });
+  let body: React.ReactNode;
+  switch (L.pattern) {
+    case 'single': body = at(0, 0, size / big, 0); break;
+    case 'double': body = <>{at(0, 0, size * 0.7 / big, 'a')}{at(0, 0, size * 1.05 / big, 'b', { delay: 220 })}</>; break;
+    case 'ring3': body = ring(3, size * 0.38); break;
+    case 'ring6': body = ring(6, size * 0.42); break;
+    case 'rainbow': body = ring(6, size * 0.42, true); break;
+    case 'orbit': body = <div className="fx-orbit" style={{ position: 'absolute', left: 0, top: 0 }}>{ring(5, size * 0.4)}</div>; break;
+    case 'rain': {
+      const sc = Math.max(2, Math.round(size / 40));
+      body = [-55, -30, -8, 14, 36, 58, -42, 24].map((x, i) => at(x * size / 140, -size * 0.55, sc, i, { delay: i * 70, cls: 'fx-fall', style: { animationDelay: `${i * 70}ms` } }));
+      break;
+    }
+    default: { // swarm: rising from around the bird
+      const sc = Math.max(2, Math.round(size / 40 * (big > 30 ? 0.25 : 1)));
+      body = [[-50, 20], [-24, -30], [10, 34], [36, -10], [52, 26], [-8, -56], [28, -48], [-46, -18], [0, 0]].map(([x, y], i) =>
+        at(x * size / 140, y * size / 140, sc, i, { delay: i * 60, cls: 'fx-rise', style: { animationDelay: `${i * 60}ms` } }));
+    }
+  }
+  return <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>{body}</div>;
 }
 
 /** Collector-style HP bar: green → amber → red. */

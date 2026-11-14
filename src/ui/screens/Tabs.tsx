@@ -310,7 +310,7 @@ export function YouTab() {
   useEffect(() => { const f = (e: Event) => setSection((e as CustomEvent).detail); window.addEventListener('birdly:trainer-section', f); return () => window.removeEventListener('birdly:trainer-section', f); }, []);
   const [questCast, setQuestCast] = useState(0);
   const cats = ['Firsts', 'Taxonomy', 'Place', 'Craft', 'Care', 'Time', 'Dedication'] as const;
-  const tierColor = { bronze: 'var(--rust)', silver: 'var(--stone)', gold: 'var(--sun)', platinum: 'var(--ice)' };
+  const tierColor = { bronze: 'var(--tier-bronze)', silver: 'var(--tier-silver)', gold: 'var(--tier-gold)', platinum: 'var(--tier-platinum)' };
   return (
     <div className="screen with-tabs">
       <PageHeader title="Trainer" right={<><FeatherChip /><button className="icon-btn" aria-label="Settings" onClick={() => nav.open({ name: 'settings' })}><Icon name="gear" size={22} /></button></>} />
@@ -440,7 +440,7 @@ export function BadgesScreen() {
   const nav = useNav();
   const cats = ['Firsts', 'Taxonomy', 'Place', 'Craft', 'Care', 'Time', 'Dedication'] as const;
   const [cat, setCat] = useState<(typeof cats)[number]>('Firsts');
-  const tierColor = { bronze: 'var(--rust)', silver: 'var(--stone)', gold: 'var(--sun)', platinum: 'var(--ice)' };
+  const tierColor = { bronze: 'var(--tier-bronze)', silver: 'var(--tier-silver)', gold: 'var(--tier-gold)', platinum: 'var(--tier-platinum)' };
   return (
     <div className="overlay">
       <div className="topbar"><button className="icon-btn" onClick={nav.back} aria-label="Back"><Icon name="back" size={20} /></button><h2>Badges</h2><span className="px small">{Object.keys(st.badges).length} / {BADGES.length}</span></div>

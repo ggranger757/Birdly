@@ -1,3 +1,4 @@
+import { FeatherIcon } from './FeatherIcon';
 import { useNav } from './nav';
 // Shared layout pieces so every tab looks and behaves the same.
 import { ReactNode } from 'react';
@@ -6,10 +7,14 @@ import { useGame } from '../app/store';
 import { sfx } from '../app/audio';
 
 /** Feathers balance: the game's currency, always in the same place. */
-export function FeatherChip() {
+export function FeatherChip({ label = true }: { label?: boolean }) {
   const f = useGame((s) => s.feathers);
   const nav = useNav();
-  return <button className="chip" aria-label={`${f} Feathers. Open Merlin's Shop`} onClick={() => nav.open({ name: 'shop' })}><Icon name="feather" size={12} color="var(--sky)" />{f}</button>;
+  return (
+    <button className="chip feather-chip" aria-label={`You have ${f} Feathers, the in-game money. Open Merlin's Shop`} onClick={() => nav.open({ name: 'shop' })}>
+      <FeatherIcon size={14} /><span className="num">{f}</span>{label && <span className="feather-word">Feathers</span>}
+    </button>
+  );
 }
 
 /** One header for every tab: title on the left, actions on the right. */
