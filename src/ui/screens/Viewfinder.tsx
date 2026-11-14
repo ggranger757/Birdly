@@ -27,7 +27,7 @@ export function Viewfinder() {
   const [hwZoom, setHwZoom] = useState<{ min: number; max: number } | null>(null);
   const [freeze, setFreeze] = useState<string | null>(null);
   const [small, setSmall] = useState(false);
-  const [showList, setShowList] = useState(false);
+  const [showList, setShowList] = useState(true);
   const [importErr, setImportErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 

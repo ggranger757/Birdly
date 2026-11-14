@@ -35,10 +35,11 @@ export interface Sighting {
   pet?: { hp: number; at: string; resting?: boolean }; // health at `at`; drains only while living in the Aviary
 }
 
+export type Theme = 'neon' | 'dusk' | 'ember' | 'field';
 export interface Settings {
   sound: boolean; haptics: boolean; grid: boolean;
   motion: 'system' | 'reduced' | 'full';
-  dyslexiaFont: boolean; refPhotos: boolean; music: boolean; gameMusic: boolean;
+  dyslexiaFont: boolean; refPhotos: boolean; theme: Theme; music: boolean; gameMusic: boolean;
 }
 
 export interface ChallengeSlot { id: string; param?: string | number; claimed: boolean }
@@ -69,6 +70,7 @@ export interface GameState {
   partner: { speciesId: string; parts: number[] } | null;
   speciesDefs: Record<string, Species>; // live species the player has caught, kept for offline use
   items: { seeds: number; berries: number; worms: number }; // food bags in the pantry
+  lenses: string[]; lens: string; // owned Snap Lenses and the one in use
   feeder: { level: number };       // food points in the Aviary feeder
   petDay: string | null;           // last day the aviary paid out Feathers
   stats: { fills: number; spent: number; quests: number };

@@ -44,10 +44,13 @@ function hasClaimable() {
   return slots.some((s) => !s.claimed && challengeProgress(st, s, now).done);
 }
 
+const THEME_BAR: Record<string, string> = { neon: '#0A0C0F', dusk: '#0E0B22', ember: '#150906', field: '#EADCBC' };
+
 export function App() {
   const ready = useGame(() => isReady());
   const onboarded = useGame((s) => s.onboarded);
   const dys = useGame((s) => s.settings.dyslexiaFont);
+  const theme = useGame((s) => ((s.settings.theme as string) === 'forest' ? 'ember' : s.settings.theme) ?? 'neon');
   const motion = useGame((s) => s.settings.motion);
   useGame((s) => s.challenges); useGame((s) => s.sightings.length);
   const [booted, setBooted] = useState(false);
@@ -65,7 +68,9 @@ export function App() {
     document.documentElement.classList.toggle('dyslexia', dys);
     document.documentElement.classList.toggle('motion-reduced', motion === 'reduced');
     document.documentElement.classList.toggle('motion-full', motion === 'full');
-  }, [dys, motion]);
+    for (const t of ['dusk', 'ember', 'field']) document.documentElement.classList.toggle(`theme-${t}`, theme === t);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BAR[theme] ?? '#0A0C0F');
+  }, [dys, motion, theme]);
 
   useEffect(() => { const t = setInterval(() => tickFeeder(), 60000); return () => clearInterval(t); }, []);
 

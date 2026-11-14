@@ -22,8 +22,15 @@ One line per meaningful choice, with the reason.
 - **One job per tab (user request).** Explore = find birds (full-screen map + pull-up drawer), BirdDex = collection, Snap = camera, Aviary = care (Birds · Feeder · Decor), Trainer = progress (Quests · Badges · Life list). Quests live only in Trainer; alerts surface where action is needed.
 - **Discovery language (user request).** Birds are found and discovered, never caught: "Discovered!", the Snap Lens records a bird's likeness while the real bird flies on.
 - **Owner-supplied sound clips** for purchases, new BirdDex entries, level-ups/badges and the Snap Lens throw; long jingles duck the music.
-- **Professor Merlin and Rowan the druid (owner art).** Merlin (a real small falcon) guides onboarding; Rowan runs the Feed Store and the quest board and casts on purchases and claims.
+- **Professor Merlin (owner art) is the only guide.** Merlin (a real small falcon) leads onboarding, runs the Feed Store and the quest board. Rowan the druid was removed at the owner's request.
+- **Bird Homes unlock by trainer level.** 51 owner-supplied scenes (Glacier lake removed); 4 at Lv 1, then 2 per level to Lv 25. Trainer level = 1 + floor(sqrt(XP/30)), finer than the 9 ranks so there is always an unlock in reach.
+- **Map tiles: OpenStreetMap.** CARTO basemaps began requiring an API key; OSM standard tiles need none (with OSM France as a fallback).
+- **Music only on the title and onboarding.** In-game music is opt-in (Settings → Music during play).
 - **Main theme is a streamed song.** Kept out of the install precache (2 MB) and cached on first play; it pauses/resumes across screens and ducks under jingles.
 - **Plain-language bird groups.** Songbird, Crow family, Bird of prey… replace invented type names; BirdDex filters are All/Found/Missing + group + where.
 - **Live data needs no login.** iNaturalist read endpoints are public with CORS `*`; Explore shows a live status, refreshes every 5 minutes, lists the latest nearby reports, and Settings has a live-data check.
 - **Sound only while the app is on screen.** All audio pauses on visibilitychange/pagehide and resumes on return.
+
+- **Snap Lenses are cosmetic.** Five lenses (Ripple free; Bubble, Ember, Arcane, Phantom bought with Feathers in Merlin's Shop) tint the capsule and play an owner-supplied fx sheet when a bird is recorded. They replace the old explosion; they never change XP or odds.
+- **Snap Power is explained where it appears** (onboarding, the result dialog, and the label on the info box): it is the photo score out of 100 and only affects XP.
+- **Colour themes:** Neon (default), Dusk, Ember and Field guide (light). Each passes axe-core colour-contrast on every main screen (WCAG 2.1 AA, Section 508).

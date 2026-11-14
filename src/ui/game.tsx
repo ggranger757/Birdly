@@ -1,3 +1,4 @@
+import { lensOf } from '../core/lenses';
 // Collector-RPG UI kit: dialogue box, cursor menu, type chips, the Snap Capsule, real-bird thumbnails.
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import type { Species } from '../data/types';
@@ -91,10 +92,12 @@ const CAPSULE = [
   '..kkkkkkkk..',
 ];
 const CAP_COL: Record<string, string> = { a: '#8DB80F', A: '#C6FF1A', k: '#0A0C0F', w: '#2F3A45', L: '#B6C0C9', e: '#1B2229', g: '#C6FF1A' };
-export function Capsule({ size = 48, glow, className, style }: { size?: number; glow?: boolean; className?: string; style?: React.CSSProperties }) {
+export function Capsule({ size = 48, glow, className, style, lens }: { size?: number; glow?: boolean; className?: string; style?: React.CSSProperties; lens?: string }) {
+  const tint = lens ? lensOf(lens).colors : null;
+  const col = (ch: string) => (tint && (ch === 'A' || ch === 'a' || ch === 'g') ? tint[ch as 'A' | 'a' | 'g'] : CAP_COL[ch]);
   return (
     <svg width={size * 0.75} height={size} viewBox="0 0 12 16" shapeRendering="crispEdges" className={className} style={style} aria-hidden>
-      {CAPSULE.flatMap((row, y) => [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={glow && ch === 'g' ? '#F7F4E9' : CAP_COL[ch]} />)))}
+      {CAPSULE.flatMap((row, y) => [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={glow && ch === 'g' ? '#F7F4E9' : col(ch)} />)))}
     </svg>
   );
 }
@@ -135,6 +138,53 @@ export function FxHit({ size = 96 }: { size?: number }) {
   return (
     <div aria-hidden style={{ width: 128 * k, height: 96 * k, backgroundImage: 'url(badges/fx_magic_hit.png)', backgroundRepeat: 'no-repeat',
       backgroundSize: `${1024 * k}px ${96 * k}px`, backgroundPosition: `${-f * 128 * k}px 0`, imageRendering: 'pixelated' }} />
+  );
+}
+
+/** One sprite-sheet effect that plays once (frames laid out left to right). */
+function FxSheet({ src, fw, fh, frames, fps, scale, delay = 0, style }: { src: string; fw: number; fh: number; frames: number; fps: number; scale: number; delay?: number; style?: React.CSSProperties }) {
+  const [f, setF] = useState(-1);
+  useEffect(() => {
+    if (reducedMotionNow()) { setF(frames); return; }
+    let i = -1; let t: ReturnType<typeof setInterval>;
+    const d = setTimeout(() => { t = setInterval(() => { i++; setF(i); if (i >= frames) clearInterval(t); }, 1000 / fps); }, delay);
+    return () => { clearTimeout(d); clearInterval(t); };
+  }, []);
+  if (f < 0 || f >= frames) return null;
+  return <div aria-hidden style={{ position: 'absolute', width: fw * scale, height: fh * scale, backgroundImage: `url(${src})`, backgroundRepeat: 'no-repeat',
+    backgroundSize: `${fw * frames * scale}px ${fh * scale}px`, backgroundPosition: `${-f * fw * scale}px 0`, imageRendering: 'pixelated', ...style }} />;
+}
+
+/** The equipped Snap Lens's recording effect, centred on (0,0) of its parent. */
+export function LensFx({ lens, size = 140 }: { lens?: string; size?: number }) {
+  const L = lensOf(lens); const { fx } = L;
+  if (L.pattern === 'single') {
+    const sc = size / Math.max(fx.fw, fx.fh);
+    return <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}><FxSheet {...fx} scale={sc} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} /></div>;
+  }
+  if (L.pattern === 'ring3') {
+    const sc = Math.max(2, Math.round(size / 3 / fx.fw)), r = size * 0.38;
+    return (
+      <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
+        {[0, 120, 240].map((a, i) => (
+          <div key={a} style={{ position: 'absolute', left: Math.cos((a - 90) * Math.PI / 180) * r, top: Math.sin((a - 90) * Math.PI / 180) * r, transform: `rotate(${a}deg)` }}>
+            <FxSheet {...fx} scale={sc} delay={i * 70} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  // swarm: bubbles rising from around the bird
+  const sc = Math.max(2, Math.round(size / 40));
+  const spots = [[-50, 20], [-24, -30], [10, 34], [36, -10], [52, 26], [-8, -56], [28, -48], [-46, -18], [0, 0]];
+  return (
+    <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
+      {spots.map(([x, y], i) => (
+        <div key={i} className="fx-rise" style={{ position: 'absolute', left: x * size / 140, top: y * size / 140, animationDelay: `${i * 60}ms` }}>
+          <FxSheet {...fx} fps={6} scale={sc} delay={i * 60} style={{ left: -fx.fw * sc / 2, top: -fx.fh * sc / 2 }} />
+        </div>
+      ))}
+    </div>
   );
 }
 

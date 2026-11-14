@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SPECIES_BY_ID } from '../../data/species';
 import { setState, getState, logEvent, setRegion, setTrainer, setPartner, useGame } from '../../app/store';
-import { paintSceneThumb } from '../../render/diorama';
+import { runBackdrop } from '../../render/diorama';
 import { Sprite, useReducedMotion } from '../components';
 import { Dialog, Types, BirdThumb, Capsule } from '../game';
 import { sfx, music } from '../../app/audio';
-import { Professor, Druid } from '../Characters';
+import { Professor } from '../Characters';
 import { RegionPicker } from './RegionPicker';
 import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, allKnownSpecies, onProviderChange, providerStatus } from '../../data/provider';
 import { typesOf } from '../../core/rarity';
 import type { Species } from '../../data/types';
 
-function SceneBackdrop({ opacity = 0.45 }: { opacity?: number }) {
+/** Valley pond, full screen and gently drifting, with a dark fade so text stays readable. */
+function SceneBackdrop({ dim = 0.15 }: { dim?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { paintSceneThumb(ref.current!, 'woodland', 'dawn', 200, 300); }, []);
-  return <canvas ref={ref} className="pix" aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity, zIndex: -1 }} />;
+  const reduced = useReducedMotion();
+  useEffect(() => runBackdrop(ref.current!, 'valley', { focus: 0.62, reduced }), [reduced]);
+  return (
+    <>
+      <canvas ref={ref} className="pix" aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: -2 }} />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, background: `linear-gradient(180deg, rgba(var(--scrim),${dim}) 0%, rgba(var(--scrim),${dim}) 45%, rgba(var(--scrim),${Math.min(0.92, dim + 0.55)}) 100%)` }} />
+    </>
+  );
 }
 
 export function Boot({ onDone }: { onDone: () => void }) {
@@ -23,7 +30,7 @@ export function Boot({ onDone }: { onDone: () => void }) {
   useEffect(() => { music('title'); }, []);
   return (
     <div className="screen" onClick={() => { sfx.select(); onDone(); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, position: 'relative', isolation: 'isolate' }}>
-      <SceneBackdrop opacity={0.55} />
+      <SceneBackdrop dim={0.3} />
       <div style={{ animation: reduced ? undefined : 'bob 900ms steps(2) infinite' }}><Sprite species={SPECIES_BY_ID.norcar} scale={4} mode="fly" /></div>
       <h1 className="title-logo">BIRDLY<b>QUEST</b></h1>
       <p className="small" style={{ margin: 0, textShadow: '1px 1px 0 #000' }}>Discover real birds with your camera.</p>
@@ -41,14 +48,15 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   useEffect(() => { music('title'); }, []);
 
   const prof = (
-    <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 20px' }}>
+    <div className="merlin-stage">
       <div style={{ filter: 'drop-shadow(4px 4px 0 #000)' }}><Professor height={144} /></div>
+      <i className="merlin-shadow" aria-hidden />
     </div>
   );
 
   if (step === 'intro') {
     return (
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
+      <div className="screen onb" style={{ justifyContent: 'flex-end' }}>
         <SceneBackdrop />
         {prof}
         <Dialog speaker="Professor Merlin" lines={[
@@ -64,20 +72,25 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
 
   if (step === 'name') {
     return (
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
+      <div className="screen onb" style={{ justifyContent: 'flex-end' }}>
+        <SceneBackdrop />
         {prof}
-        <label className="label" htmlFor="tname">Trainer name</label>
+        <div className="onb-card">
+        <Dialog speaker="Professor Merlin" lines={['What should I call you, explorer?']} />
+        <label className="label mt16" htmlFor="tname" style={{ display: 'block', marginBottom: 6 }}>Trainer name</label>
         <input id="tname" autoFocus value={name} maxLength={16} onChange={(e) => setName(e.target.value)} placeholder="Your name"
-          style={{ minHeight: 56, padding: '8px 14px', background: '#000', border: '3px solid var(--accent)', fontFamily: 'var(--px)', fontSize: 20, textTransform: 'uppercase', borderRadius: 0 }} />
+          style={{ minHeight: 56, padding: '8px 14px', background: 'var(--well)', border: '3px solid var(--accent)', fontFamily: 'var(--px)', fontSize: 20, textTransform: 'uppercase', borderRadius: 0 }} />
         <button className="btn primary big block" onClick={() => { setTrainer(name.trim() || 'Birder'); sfx.select(); setStep('region'); }}>{name.trim() ? 'That’s me' : 'Skip'}</button>
+        </div>
       </div>
     );
   }
 
   if (step === 'region') {
     return (
-      <div className="screen">
-        <Dialog speaker="Professor Merlin" lines={[`${name.trim() || 'Birder'}! Where do you live? Every place has its own birds.`]} />
+      <div className="screen onb">
+        <SceneBackdrop dim={0.7} />
+        <div className="row" style={{ alignItems: 'flex-end', gap: 10, marginTop: 8 }}><Professor height={96} /><div className="grow"><Dialog speaker="Professor Merlin" lines={[`${name.trim() || 'Birder'}! Where do you live? Every place has its own birds.`]} /></div></div>
         <div className="mt16">
           <RegionPicker value={getState().onboarded ? region : undefined} onPick={(code) => { setRegion(code); setStep('partner'); }} />
         </div>
@@ -92,19 +105,20 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
 }
 
 function Outro({ r, region, onFinish }: { r: ReturnType<typeof getRegion>; region: string; onFinish: () => void }) {
-  const [druidAct, setDruidAct] = useState<'idle' | 'cast'>('idle');
-  const [druidKey, setDruidKey] = useState(0);
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
+    <div className="screen onb" style={{ justifyContent: 'flex-end' }}>
       <SceneBackdrop />
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 18, marginBottom: 20 }}>
-        <Professor height={96} />
-        <Druid scale={1} act={druidAct} actKey={druidKey} />
+      <div className="merlin-stage">
+        <div style={{ filter: 'drop-shadow(4px 4px 0 #000)' }}><Professor height={144} /></div>
+        <i className="merlin-shadow" aria-hidden />
       </div>
-      <Dialog speaker="Professor Merlin" onLine={(i) => { if (i === 1) { setDruidAct('cast'); setDruidKey((k) => k + 1); } }} lines={[
+      <Dialog speaker="Professor Merlin" lines={[
         `${r.flag ?? ''} ${regionLabel(region)}. Splendid birding country!`,
-        'This is Rowan, a druid of the forest. Rowan keeps the feed store and hands out quests.',
-        'Here is your Snap Lens. Point your camera at a real bird and press the shutter to record it.',
+        'I run the shop (bird food and Snap Lenses) and hand out quests. Visit me whenever your feeder runs low.',
+        'Here is your Snap Lens. Point your camera at a real bird and press the shutter.',
+        'Every photo gets a SNAP POWER score out of 100. Sharp, close, well-lit photos score higher and earn more XP.',
+        'Then tell me which bird it is. I turn your photo into a pixel bird, coloured from YOUR shot, and you record it with your lens.',
+        'You start with the Ripple Lens. Buy fancier lenses in my shop with Feathers. Each one records birds with its own effect!',
         'Fill your BirdDex, earn badges, and grow your Aviary. Your quest begins now!',
       ]} onDone={() => {
         setState((s) => ({ ...s, onboarded: true, diorama: { ...s.diorama, biome: s.habitat } }));
@@ -135,8 +149,9 @@ function PartnerPick({ region, onDone }: { region: string; onDone: () => void })
   }, [region, ready]);
   const [pick, setPick] = useState<Species | null>(null);
   return (
-    <div className="screen">
-      <Dialog speaker="Professor Merlin" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} />
+    <div className="screen onb">
+      <SceneBackdrop dim={0.7} />
+      <div className="row" style={{ alignItems: 'flex-end', gap: 10, marginTop: 8 }}><Professor height={96} /><div className="grow"><Dialog speaker="Professor Merlin" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} /></div></div>
       {!ready && <p className="small muted mt8">Looking up the birds of {regionLabel(region)}…</p>}
       {!ready && <div className="col mt16" style={{ gap: 12 }}>{[0, 1, 2].map((i) => <div key={i} className="panel skeleton" style={{ margin: 0, height: 84 }} />)}</div>}
       <div className="col mt16" style={{ gap: 12 }}>

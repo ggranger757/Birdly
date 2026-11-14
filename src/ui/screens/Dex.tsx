@@ -63,7 +63,7 @@ export function Dex() {
       </div>
 
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your birds or a dex number" aria-label="Search BirdDex"
-        style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: '#000', border: '2px solid var(--smoke)', marginBottom: 8 }} />
+        style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: 'var(--well)', border: '2px solid var(--smoke)', marginBottom: 8 }} />
       <Segmented label="Show" value={filter} onChange={setFilter} options={[
         { id: 'all', label: `All ${entries.length}` }, { id: 'found', label: `Found ${have}` }, { id: 'missing', label: `Missing ${entries.length - have}` },
       ]} />

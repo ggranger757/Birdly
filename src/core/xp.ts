@@ -39,6 +39,13 @@ export function rankFor(xp: number) {
   return { index: i, name: RANKS[i].name, next, progress: next ? (xp - RANKS[i].xp) / (next.xp - RANKS[i].xp) : 1 };
 }
 
+/** Trainer level: finer-grained than ranks, so there is always a next level in reach. */
+export function trainerLevel(xp: number) {
+  const lv = 1 + Math.floor(Math.sqrt(Math.max(0, xp) / 30));
+  const at = (l: number) => (l - 1) * (l - 1) * 30;
+  return { level: lv, progress: (xp - at(lv)) / (at(lv + 1) - at(lv)), nextXp: at(lv + 1) };
+}
+
 export function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

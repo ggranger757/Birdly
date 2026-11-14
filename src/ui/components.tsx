@@ -181,6 +181,7 @@ export function TopBar({ title, onBack, right, backIcon = 'back' }: { title: str
 export function Sheet({ onClose, children, label }: { onClose: () => void; children: ReactNode; label: string }) {
   const [drag, setDrag] = useState(0);
   const start = useRef<number | null>(null);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose} />

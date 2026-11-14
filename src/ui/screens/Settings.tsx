@@ -1,3 +1,4 @@
+import type { Theme } from '../../core/model';
 import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, setState, exportBackup, importBackup, resetAll, getState, PIPELINE_VERSION, setRegion, setTrainer } from '../../app/store';
@@ -25,6 +26,13 @@ function Toggle({ label, on, set, hint }: { label: string; on: boolean; set: (v:
   );
 }
 
+const THEMES: { id: Theme; label: string; bg: string; accent: string; card: string; ink: string; font?: string }[] = [
+  { id: 'neon', label: 'Neon (default)', bg: '#0A0C0F', accent: '#C6FF1A', card: '#EEF3EA', ink: '#0A0C0F' },
+  { id: 'dusk', label: 'Dusk', bg: 'linear-gradient(135deg, #1A1446, #1C0E33)', accent: 'linear-gradient(135deg, #9FB8FF, #C9A2FF)', card: '#F1EEFF', ink: '#0B0820' },
+  { id: 'ember', label: 'Ember', bg: 'linear-gradient(135deg, #2A0F08, #1E0B05)', accent: 'linear-gradient(135deg, #FF6A45, #FFB347)', card: '#FFF2EA', ink: '#1A0700' },
+  { id: 'field', label: 'Field guide (light)', bg: '#EADCBC', accent: '#111111', card: '#FBF5E6', ink: '#17110A', font: "'Courier New', monospace" },
+];
+
 export function Settings() {
   const nav = useNav();
   const st = useGame((s) => s);
@@ -50,7 +58,7 @@ export function Settings() {
         <div className="panel">
           <label className="small muted" htmlFor="tn">Trainer name</label>
           <input id="tn" defaultValue={st.trainerName} maxLength={16} onBlur={(e) => setTrainer(e.target.value.trim() || 'Birder')}
-            style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: '#000', border: '2px solid var(--smoke)', fontSize: 16 }} />
+            style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: 'var(--well)', border: '2px solid var(--smoke)', fontSize: 16 }} />
           <div className="small muted mt16">Region</div>
           <button className="srow" onClick={() => setPick(true)}>
             <span style={{ fontSize: 26 }} aria-hidden>{getRegion(st.region).flag}</span>
@@ -73,6 +81,20 @@ export function Settings() {
           <Toggle label="Haptics" on={st.settings.haptics} set={(v) => set({ haptics: v })} />
           <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />
           <Toggle label="Reference photos" on={st.settings.refPhotos} set={(v) => set({ refPhotos: v })} hint="Real photos of each species from iNaturalist, credited to the photographer." />
+        </div>
+
+        <div className="label mb8">Theme</div>
+        <div className="panel">
+          <div role="radiogroup" aria-label="Colour theme" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {THEMES.map((t) => (
+              <button key={t.id} role="radio" aria-checked={((st.settings.theme as string) === 'forest' ? 'ember' : st.settings.theme ?? 'neon') === t.id} className={`theme-card ${((st.settings.theme as string) === 'forest' ? 'ember' : st.settings.theme ?? 'neon') === t.id ? 'on' : ''}`}
+                onClick={() => set({ theme: t.id })}>
+                <span className="theme-swatch" style={{ background: t.bg }}><i style={{ background: t.accent }} /><b style={{ background: t.card, color: t.ink, fontFamily: t.font }}>Aa</b></span>
+                <span className="small">{t.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="small muted" style={{ marginBottom: 0 }}>Every theme meets WCAG 2.1 AA contrast (Section 508).</p>
         </div>
 
         <div className="label mb8">Accessibility</div>

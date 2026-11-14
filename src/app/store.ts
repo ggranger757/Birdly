@@ -1,4 +1,6 @@
 // Game state: one local store, persisted to IndexedDB on every change.
+import { SCENES } from '../render/diorama';
+import { LENSES, type LensId } from '../core/lenses';
 import { useSyncExternalStore } from 'react';
 import type { GameState, Sighting, Verification, ChallengeSlot } from '../core/model';
 import { UNKNOWN } from '../core/model';
@@ -8,7 +10,7 @@ import { getRegion, loadGeo, defaultRegionCode } from '../data/geo';
 import { assembleSprite, PhotoPalette, PIPELINE_VERSION } from '../core/pixel/sprite';
 import type { Analysis } from '../core/pixel/extract';
 import { lns, rarityOf, Rarity } from '../core/rarity';
-import { catchXp, applyStreak, dayKey, rankFor, CatchMode } from '../core/xp';
+import { catchXp, applyStreak, dayKey, rankFor, CatchMode, trainerLevel } from '../core/xp';
 import { BADGES, newlyEarned, TIER_FEATHERS, Badge } from '../core/badges';
 import { pickDaily, pickWeekly, pickSeasonal, weekKey, challengeProgress, CHALLENGE_BY_ID } from '../core/challenges';
 import { sunTimes, dayPhase } from '../core/sun';
@@ -28,10 +30,10 @@ export function freshState(): GameState {
     challenges: { day: '', daily: [], week: '', weekly: null, seasonal: null, history: {} },
     events: { sitSpots: [], shares: [] },
     diorama: { biome: 'urban', birds: [], decor: {} }, ownedDecor: [],
-    settings: { sound: true, music: true, gameMusic: false, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true },
+    settings: { sound: true, music: true, gameMusic: false, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true, theme: 'neon' },
     sessions: 0, lastSession: null, backupPromptAfter: null, firstCatchSeconds: null, installStartedAt: now, log: [],
     trainerName: '', partner: null, speciesDefs: {},
-    items: { seeds: 0, berries: 0, worms: 0 }, feeder: { level: 60 }, petDay: null,
+    items: { seeds: 0, berries: 0, worms: 0 }, lenses: ['ripple'], lens: 'ripple', feeder: { level: 60 }, petDay: null,
     stats: { fills: 0, spent: 0, quests: 0 }, badgeQueue: [],
   };
 }
@@ -64,7 +66,7 @@ export function logEvent(e: string, d?: unknown) {
 }
 
 function adopt(saved: GameState | undefined) {
-  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings }, items: { ...freshState().items, ...(saved.items ?? {}) }, feeder: saved.feeder ?? freshState().feeder, stats: { ...freshState().stats, ...(saved.stats ?? {}) }, badgeQueue: saved.badgeQueue ?? [] };
+  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings }, items: { ...freshState().items, ...(saved.items ?? {}) }, feeder: saved.feeder ?? freshState().feeder, stats: { ...freshState().stats, ...(saved.stats ?? {}) }, badgeQueue: saved.badgeQueue ?? [], lenses: saved.lenses?.length ? saved.lenses : ['ripple'], lens: saved.lens ?? 'ripple' };
 }
 
 export async function initStore() {
@@ -126,6 +128,7 @@ export interface CatchResult {
   species: Species;
   badges: Badge[];
   rankUp: string | null;
+  levelUp: { level: number; homes: string[] } | null;
   previousXp: number;
 }
 
@@ -222,7 +225,9 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   if (sighting.firstRecord && state.sightings.length === 1) logEvent('first_catch_seconds', state.firstCatchSeconds);
   emit(); persist();
   const rankAfter = rankFor(state.xp).name;
-  return { sighting, species: sp, badges: earned, rankUp: rankAfter !== rankBefore ? rankAfter : null, previousXp };
+  const lvA = trainerLevel(previousXp).level, lvB = trainerLevel(state.xp).level;
+  const homes = Object.values(SCENES).filter((h) => h.level > lvA && h.level <= lvB).map((h) => h.label);
+  return { sighting, species: sp, badges: earned, rankUp: rankAfter !== rankBefore ? rankAfter : null, levelUp: lvB > lvA ? { level: lvB, homes } : null, previousXp };
 }
 
 function fakeHash(s: string) {
@@ -372,6 +377,16 @@ export function buyFood(food: Food, qty = 1): boolean {
   return after(true);
 }
 
+/** Buy a Snap Lens with Feathers and put it on. */
+export function buyLens(id: LensId): boolean {
+  const l = LENSES[id];
+  if (!l || state.lenses.includes(id) || state.feathers < l.price) return false;
+  setState((s) => ({ ...s, feathers: s.feathers - l.price, lenses: [...s.lenses, id], lens: id, stats: { ...s.stats, spent: s.stats.spent + l.price } }));
+  logEvent('buy_lens', id);
+  return after(true);
+}
+export function equipLens(id: LensId) { if (state.lenses.includes(id)) setState((s) => ({ ...s, lens: id })); }
+
 /** Pour one bag from the pantry into the feeder. Returns points added (0 if full or no bag). */
 export function fillFeeder(food: Food): number {
   if (state.items[food] <= 0 || state.feeder.level >= FEEDER_CAP) return 0;
@@ -403,3 +418,6 @@ export function collectAviary(now = new Date()): number {
 export function hungryCount(now = new Date()): number {
   return state.sightings.filter((x) => inAviary(x.id) && hpNow(x, now) < 30).length;
 }
+
+// e2e/dev only: lets automated checks seed a save. Stripped from production builds.
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as any).__store = { getState, setState, fileCatch };

@@ -75,16 +75,3 @@ export function Professor({ height = 144 }: { height?: number }) {
   const scale = Math.max(1, Math.floor(height / 48));
   return <div className="hover-bob"><SheetSprite src="chars/merlin.png" cell={48} row={0} fps={6} scale={scale} label="Professor Merlin" /></div>;
 }
-
-export type DruidAct = 'idle' | 'cast' | 'leap' | 'run';
-const DRUID_ROW: Record<DruidAct, number> = { idle: 0, run: 1, cast: 4, leap: 5 };
-
-/** Rowan the druid. Change `act` (with a new `actKey`) to play a one-shot move, then he returns to idle. */
-export function Druid({ act = 'idle', actKey = 0, scale = 1, flip }: { act?: DruidAct; actKey?: number; scale?: number; flip?: boolean }) {
-  const [playing, setPlaying] = useState<DruidAct>(act);
-  useEffect(() => { setPlaying(act); }, [act, actKey]);
-  return (
-    <SheetSprite key={`${playing}-${actKey}`} src="chars/druid.png" cell={84} row={DRUID_ROW[playing]} fps={playing === 'idle' ? 5 : 11} scale={scale}
-      once={playing !== 'idle'} onEnd={() => setPlaying('idle')} label="Rowan the druid" flip={flip} />
-  );
-}

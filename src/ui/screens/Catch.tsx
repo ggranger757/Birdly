@@ -12,7 +12,8 @@ import { renderFrames } from '../../core/pixel/sprite';
 import { RGB, CLEAR, IDX, HEX } from '../../core/palette';
 import { rgbToLab, snapToPalette } from '../../core/color';
 import { Sprite, useReducedMotion } from '../components';
-import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, FxHit } from '../game';
+import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, LensFx } from '../game';
+import { lensOf } from '../../core/lenses';
 import { sfx, haptic, gameMusic, playClip } from '../../app/audio';
 import { RANK_LINES } from '../../core/xp';
 import type { Verification } from '../../core/model';
@@ -61,11 +62,12 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
 
   const sc = analysis?.score;
   const snapPower = sc?.total ?? 0;
+  const lens = useGame((st) => st.lens);
   return (
     <div className="overlay modal" style={{ background: '#000' }}>
-      <BattleField job={job} habitat={habitat} region={region} stage={stage} result={result} analysis={analysis} snapPower={snapPower}
+      <BattleField job={job} habitat={habitat} region={region} stage={stage} result={result} analysis={analysis} snapPower={snapPower} lens={lens}
         onThrown={() => setStage('caught')} />
-      <div style={{ padding: '14px 12px calc(14px + var(--safe-b))', background: '#0A0C0F', borderTop: '3px solid #000', maxHeight: '58%', overflowY: 'auto' }}>
+      <div style={{ padding: '14px 12px calc(14px + var(--safe-b))', background: 'var(--bg)', borderTop: '3px solid #000', maxHeight: '58%', overflowY: 'auto' }}>
         {stage === 'wipe' && <Dialog lines={['…']} />}
         {stage === 'dark' && (
           <Dialog lines={['Hmm… the photo is too dark to see the bird.', 'Try again with the bird against the sky, or use it anyway.']}>
@@ -75,7 +77,7 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
         {stage === 'spotted' && sc && (
           <Dialog lines={[
             job.mode === 'sketch' ? 'You sketched a wild bird!' : 'You spotted a wild bird!',
-            ...(job.mode === 'field' ? [`Snap Power ${snapPower}! ${sc.coaching[0] ?? ''}`] : job.mode === 'import' ? ['An archived photo — it counts, at half XP.'] : []),
+            ...(job.mode === 'field' ? [`Snap Power ${snapPower} out of 100! That's your photo score: sharp, close, well-lit shots score higher and earn more XP.${sc.coaching[0] ? ` Tip: ${sc.coaching[0]}` : ''}`] : job.mode === 'import' ? ['An archived photo — it counts, at half XP.'] : []),
             'What bird is it?',
           ]} onDone={() => setStage('identify')} />
         )}
@@ -84,9 +86,9 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
         )}
         {stage === 'appear' && result && (
           <>
-            <Dialog lines={[`A wild ${result.species.common.toUpperCase()} appeared!`]} />
+            <Dialog lines={[`Your photo turned into a pixel ${result.species.common.toUpperCase()}! Its colours come from YOUR photo, so no one else has this exact bird.`]} />
             <button className="btn primary big block mt8" onClick={() => { playClip('throw'); haptic(15); setStage('throw'); }}>
-              <Capsule size={24} /> Record with Snap Lens
+              <Capsule size={24} lens={lens} /> Record with {lensOf(lens).name}
             </button>
           </>
         )}
@@ -154,7 +156,8 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
     ...(s.sprite.variant !== 'normal' ? [`Incredible — a rare ${s.sprite.variant} bird!`] : []),
     ...(result.badges.length === 1 ? [`You earned the ${result.badges[0].name.toUpperCase()} badge!`]
       : result.badges.length > 1 ? [`You earned ${result.badges.length} badges: ${result.badges.map((b) => b.name).join(', ')}!`] : []),
-    ...(result.rankUp ? [`Trainer level up! ${RANK_LINES[result.rankUp] ?? result.rankUp}`] : []),
+    ...(result.levelUp ? [`Trainer level up! You are now Lv ${result.levelUp.level}.${result.rankUp ? ` ${RANK_LINES[result.rankUp] ?? result.rankUp}` : ''}`] : result.rankUp ? [`Trainer level up! ${RANK_LINES[result.rankUp] ?? result.rankUp}`] : []),
+    ...(result.levelUp?.homes.length ? [`New Bird Home${result.levelUp.homes.length > 1 ? 's' : ''} unlocked: ${result.levelUp.homes.join(' and ')}! Visit your Aviary to move in.`] : []),
   ];
   const played = useRef(false);
   return (
@@ -182,8 +185,8 @@ function seededOrder(n: number, seed: number): number[] {
   return a;
 }
 
-function BattleField({ job, habitat, region, stage, result, analysis, snapPower, onThrown }: {
-  job: CaptureJob; habitat: any; region: ReturnType<typeof getRegion>; stage: Stage; result: CatchResult | null; analysis: Analysis | null; snapPower: number; onThrown: () => void;
+function BattleField({ job, habitat, region, stage, result, analysis, snapPower, onThrown, lens }: {
+  job: CaptureJob; habitat: any; region: ReturnType<typeof getRegion>; stage: Stage; result: CatchResult | null; analysis: Analysis | null; snapPower: number; onThrown: () => void; lens: string;
 }) {
   const reduced = useReducedMotion();
   const sceneRef = useRef<HTMLCanvasElement>(null);
@@ -254,6 +257,7 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
   const birdVisible = (stage === 'appear' || (stage === 'throw' && (throwPhase === 'fly'))) && !!s;
   const capsuleOnField = stage === 'throw' && (throwPhase === 'drop' || throwPhase === 'wobble' || throwPhase === 'done') || stage === 'caught';
   const showPhoto = stage === 'wipe' || stage === 'spotted' || stage === 'dark' || stage === 'identify' || stage === 'search';
+  const showRef = showPhoto || stage === 'appear';
 
   return (
     <div className="field">
@@ -262,7 +266,7 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
       <div className="hpbox" style={{ left: 12, top: 'calc(12px + var(--safe-t))' }}>
         <div className="row between"><span className="nm">{sp && stage !== 'identify' ? sp.common : 'Wild bird'}</span><span className="nm">{s ? `Lv${s.level ?? 5}` : 'Lv?'}</span></div>
         {sp && stage !== 'identify' && stage !== 'search' && <div style={{ marginTop: 2 }}><Types sp={sp} /></div>}
-        <div className="row between" style={{ fontSize: 10, fontFamily: 'var(--px)', marginTop: 4 }}><span>SNAP</span><span>{job.mode === 'field' ? snapPower : '—'}</span></div>
+        <div className="row between" style={{ fontSize: 10, fontFamily: 'var(--px)', marginTop: 4 }}><span>SNAP POWER</span><span>{job.mode === 'field' ? snapPower : '—'}</span></div>
         <div className="hpbar"><i style={{ width: `${job.mode === 'field' ? snapPower : 50}%`, background: snapPower > 70 ? '#6FA84B' : snapPower > 40 ? '#E8A33D' : '#A8452F' }} /></div>
       </div>
       {/* the bird's platform */}
@@ -271,9 +275,18 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
         <>
           {/* the wild bird, seen through the game: your photo reduced to 32×32 in the game palette */}
           <div style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)' }}><PixelPhoto src={job.shot.preview} bbox={analysis?.bbox} /></div>
-          <div className="taped" style={{ position: 'absolute', left: 14, top: 'calc(96px + var(--safe-t))', width: 84, transform: 'rotate(-3deg)', padding: '4px 4px 10px' }}>
-            <img src={job.shot.preview} alt="Your photo" style={{ aspectRatio: '1/1', objectFit: 'cover' }} />
-          </div>
+        </>
+      )}
+      {showRef && (
+        <div className="taped" style={{ position: 'absolute', left: 14, top: 'calc(96px + var(--safe-t))', width: 84, transform: 'rotate(-3deg)', padding: '4px 4px 10px', zIndex: 3 }}>
+          <img src={job.shot.preview} alt="Your photo" style={{ aspectRatio: '1/1', objectFit: 'cover' }} />
+          <span className="photo-tag">Your photo</span>
+        </div>
+      )}
+      {stage === 'appear' && (
+        <>
+          <div className="reveal-arrow" aria-hidden>▶ ▶ ▶</div>
+          <span className="pixel-tag" style={{ right: 'calc(8% + 20px)', top: 'calc(58% + 18px)' }}>{revealed ? 'Your pixel bird!' : 'Becoming pixels…'}</span>
         </>
       )}
       {stage === 'appear' && !revealed && <canvas ref={revealRef} width={32} height={32} className="pix" style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)', width: 128, height: 128 }} aria-label="Your photo turning into a sprite" />}
@@ -286,18 +299,12 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
         <div className="suck" style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)' }}><Sprite species={sp} parts={s.sprite.parts} scale={4} mode="static" flip /></div>
       )}
       {stage === 'throw' && throwPhase === 'fly' && (
-        <div className="throw" style={{ ['--tx' as any]: 'calc(92% - 95px)', ['--ty' as any]: 'calc(58% - 80px)' }}><Capsule size={44} /></div>
+        <div className="throw" style={{ ['--tx' as any]: 'calc(92% - 95px)', ['--ty' as any]: 'calc(58% - 80px)' }}><Capsule size={44} lens={lens} /></div>
       )}
-      {stage === 'throw' && throwPhase === 'open' && <div className="flash-white" />}
+      {stage === 'throw' && throwPhase !== 'none' && throwPhase !== 'fly' && <div style={{ position: 'absolute', right: 'calc(8% + 95px)', top: 'calc(58% - 48px)', zIndex: 7 }}><LensFx lens={lens} size={150} /></div>}
       {capsuleOnField && (
         <div className="capsule-sit" style={{ right: 'calc(8% + 78px)', top: 'calc(58% - 34px)' }}>
-          <div key={wob} className={throwPhase === 'wobble' && wob > 0 ? 'wobble' : ''} style={{ transformOrigin: '50% 100%' }}><Capsule size={44} glow={throwPhase === 'done' || stage === 'caught'} /></div>
-        </div>
-      )}
-      {throwPhase === 'done' && <div style={{ position: 'absolute', right: 'calc(8% + 62px)', top: 'calc(58% - 110px)', zIndex: 7 }}><FxHit size={120} /></div>}
-      {(throwPhase === 'done' || stage === 'caught') && (
-        <div className="burst" style={{ right: 'calc(8% + 95px)', top: 'calc(58% - 20px)', left: 'auto' }}>
-          {[[-50, -40], [50, -40], [-60, 10], [60, 10], [0, -60], [-30, 40], [30, 40], [0, 50]].map(([x, y], i) => <i key={i} style={{ ['--bx' as any]: `${x}px`, ['--by' as any]: `${y}px` }} />)}
+          <div key={wob} className={throwPhase === 'wobble' && wob > 0 ? 'wobble' : ''} style={{ transformOrigin: '50% 100%' }}><Capsule size={44} lens={lens} glow={throwPhase === 'done' || stage === 'caught'} /></div>
         </div>
       )}
       {/* trainer side: partner peeks in from bottom-left */}

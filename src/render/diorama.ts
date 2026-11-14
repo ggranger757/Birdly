@@ -13,30 +13,68 @@ export interface SceneDef {
   ground: number;                 // y where birds stand, in scene pixels
   water?: [number, number, number?, number?]; // y0, y1, x0, x1 of open water
   tint?: string;                  // phase grade laid over the scene
+  level: number;                  // trainer level that unlocks this Bird Home
   props: ('branchL' | 'branchR' | 'wire' | 'feeder' | 'post')[];
 }
 
 export const SCENES: Record<string, SceneDef> = {
-  skyline: { id: 'skyline', label: 'Smog skyline', layers: 8, w: 630, h: 320, ground: 298, props: ['branchL', 'wire', 'feeder'] },
-  c2: { id: 'c2', label: 'High street', layers: 6, w: 480, h: 270, ground: 224, props: ['branchL', 'wire', 'feeder'] },
-  c4: { id: 'c4', label: 'Old town square', layers: 7, w: 480, h: 270, ground: 222, props: ['branchL', 'wire', 'feeder'] },
-  neoncity: { id: 'neoncity', label: 'Neon night', layers: 6, w: 1152, h: 216, ground: 194, props: ['branchL', 'wire', 'feeder'] },
-  n1: { id: 'n1', label: 'Lone tree at sunrise', layers: 4, w: 576, h: 324, ground: 262, props: ['branchL', 'branchR'] },
-  nfb: { id: 'nfb', label: 'Misty wood', layers: 6, w: 620, h: 300, ground: 262, props: ['branchL', 'branchR'] },
-  pine: { id: 'pine', label: 'Pine forest', layers: 14, w: 640, h: 300, ground: 260, props: ['branchL', 'branchR'] },
-  b3: { id: 'b3', label: 'Old-growth path', layers: 8, w: 480, h: 270, ground: 215, props: ['branchL', 'branchR'] },
-  dusk: { id: 'dusk', label: 'Mountain dusk', layers: 6, w: 320, h: 240, ground: 230, props: ['branchL', 'branchR'] },
-  nfa: { id: 'nfa', label: 'Night forest', layers: 6, w: 440, h: 240, ground: 197, props: ['branchL', 'branchR'] },
-  n2: { id: 'n2', label: 'Glacier lake', layers: 4, w: 576, h: 324, ground: 290, water: [244, 312], props: ['branchL', 'post'] },
-  valley: { id: 'valley', label: 'Valley pond', layers: 6, w: 768, h: 300, ground: 286, water: [246, 264, 350, 620], props: ['branchL', 'post'] },
-  n3: { id: 'n3', label: 'Palm shore', layers: 4, w: 576, h: 324, ground: 312, water: [218, 280], props: ['branchL', 'post'] },
-  v_tundra: { id: 'v_tundra', label: 'Tundra night', layers: 4, w: 384, h: 216, ground: 202, props: ['branchL', 'post'] },
+  valley: { id: 'valley', label: "Valley pond", level: 1, layers: 6, w: 768, h: 300, ground: 286, water: [246, 264, 350, 620], props: ['branchL', 'post'] },
+  pine: { id: 'pine', label: "Pine forest", level: 1, layers: 14, w: 640, h: 300, ground: 260, props: ['branchL', 'branchR'] },
+  c2: { id: 'c2', label: "High street", level: 1, layers: 6, w: 480, h: 270, ground: 224, props: ['branchL', 'wire', 'feeder'] },
+  n3: { id: 'n3', label: "Palm shore", level: 1, layers: 4, w: 576, h: 324, ground: 312, water: [218, 280], props: ['branchL', 'post'] },
+  n1: { id: 'n1', label: "Lone tree at sunrise", level: 2, layers: 4, w: 576, h: 324, ground: 262, props: ['branchL', 'branchR'] },
+  nfb: { id: 'nfb', label: "Misty wood", level: 2, layers: 6, w: 620, h: 300, ground: 262, props: ['branchL', 'branchR'] },
+  c4: { id: 'c4', label: "Old town square", level: 3, layers: 7, w: 480, h: 270, ground: 222, props: ['branchL', 'wire', 'feeder'] },
+  b3: { id: 'b3', label: "Old-growth path", level: 3, layers: 8, w: 480, h: 270, ground: 215, props: ['branchL', 'branchR'] },
+  dusk: { id: 'dusk', label: "Mountain dusk", level: 4, layers: 6, w: 320, h: 240, ground: 230, props: ['branchL', 'branchR'] },
+  a4: { id: 'a4', label: "Mountain shrine", level: 4, layers: 6, w: 576, h: 324, ground: 302, props: ['branchL', 'branchR'] },
+  v_downs: { id: 'v_downs', label: "Rolling downs", level: 5, layers: 4, w: 384, h: 216, ground: 200, props: ['branchL', 'branchR'] },
+  violet: { id: 'violet', label: "Violet wood", level: 5, layers: 6, w: 640, h: 300, ground: 290, props: ['branchL', 'branchR'] },
+  skyline: { id: 'skyline', label: "Smog skyline", level: 6, layers: 8, w: 630, h: 320, ground: 298, props: ['branchL', 'wire', 'feeder'] },
+  a1: { id: 'a1', label: "Desert town", level: 6, layers: 5, w: 576, h: 324, ground: 300, props: ['branchL', 'wire', 'feeder'] },
+  reef: { id: 'reef', label: "Jungle ruins", level: 7, layers: 4, w: 1920, h: 240, ground: 228, props: ['branchL', 'branchR'] },
+  w2: { id: 'w2', label: "Treehouse village", level: 7, layers: 4, w: 576, h: 324, ground: 314, props: ['branchL', 'branchR'] },
+  nfa: { id: 'nfa', label: "Night forest", level: 8, layers: 6, w: 440, h: 240, ground: 197, props: ['branchL', 'branchR'] },
+  neoncity: { id: 'neoncity', label: "Neon night", level: 8, layers: 6, w: 1152, h: 216, ground: 194, props: ['branchL', 'wire', 'feeder'] },
+  b1: { id: 'b1', label: "Statue garden", level: 9, layers: 7, w: 480, h: 270, ground: 250, props: ['branchL', 'branchR'] },
+  a3: { id: 'a3', label: "Haunted hamlet", level: 9, layers: 5, w: 576, h: 324, ground: 272, props: ['branchL', 'branchR'] },
+  pfor: { id: 'pfor', label: "Pine ridge", level: 10, layers: 11, w: 900, h: 240, ground: 225, props: ['branchL', 'branchR'] },
+  v_tundra: { id: 'v_tundra', label: "Tundra night", level: 10, layers: 4, w: 384, h: 216, ground: 202, props: ['branchL', 'branchR'] },
+  c3: { id: 'c3', label: "Neon arcade", level: 11, layers: 6, w: 480, h: 270, ground: 260, props: ['branchL', 'wire', 'feeder'] },
+  miami: { id: 'miami', label: "Sunset boulevard", level: 11, layers: 5, w: 896, h: 240, ground: 222, props: ['branchL', 'wire', 'feeder'] },
+  v_mesa: { id: 'v_mesa', label: "Mesa", level: 12, layers: 4, w: 384, h: 216, ground: 200, props: ['branchL', 'branchR'] },
+  v_kiln: { id: 'v_kiln', label: "Red canyon", level: 12, layers: 4, w: 384, h: 216, ground: 200, props: ['branchL', 'branchR'] },
+  s2: { id: 's2', label: "Overgrown city", level: 13, layers: 9, w: 480, h: 270, ground: 245, props: ['branchL', 'wire', 'feeder'] },
+  w3: { id: 'w3', label: "Old bus stop", level: 13, layers: 4, w: 576, h: 324, ground: 290, props: ['branchL', 'wire', 'feeder'] },
+  n4: { id: 'n4', label: "Stony ridge", level: 14, layers: 4, w: 576, h: 324, ground: 299, props: ['branchL', 'branchR'] },
+  v_cairn: { id: 'v_cairn', label: "Snowy cairn", level: 14, layers: 4, w: 384, h: 216, ground: 200, props: ['branchL', 'branchR'] },
+  b2: { id: 'b2', label: "Gargoyle hall", level: 15, layers: 7, w: 480, h: 270, ground: 260, props: ['branchL', 'wire', 'feeder'] },
+  gothic: { id: 'gothic', label: "Gothic town", level: 15, layers: 7, w: 1920, h: 216, ground: 206, props: ['branchL', 'wire', 'feeder'] },
+  w1: { id: 'w1', label: "Scrapyard outpost", level: 16, layers: 3, w: 576, h: 324, ground: 280, props: ['branchL', 'wire', 'feeder'] },
+  w4: { id: 'w4', label: "Frozen market", level: 16, layers: 4, w: 576, h: 324, ground: 290, props: ['branchL', 'wire', 'feeder'] },
+  s1: { id: 's1', label: "Ruined shacks", level: 17, layers: 7, w: 480, h: 270, ground: 240, props: ['branchL', 'wire', 'feeder'] },
+  s1n: { id: 's1n', label: "Ruined shacks by night", level: 17, layers: 7, w: 480, h: 270, ground: 240, props: ['branchL', 'wire', 'feeder'] },
+  a2: { id: 'a2', label: "Abandoned playground", level: 18, layers: 6, w: 576, h: 324, ground: 300, props: ['branchL', 'wire', 'feeder'] },
+  c1: { id: 'c1', label: "Back alley", level: 18, layers: 7, w: 480, h: 270, ground: 211, props: ['branchL', 'wire', 'feeder'] },
+  v_hollow: { id: 'v_hollow', label: "Misty hollow", level: 19, layers: 4, w: 384, h: 216, ground: 195, props: ['branchL', 'branchR'] },
+  v_flue: { id: 'v_flue', label: "Factory haze", level: 19, layers: 4, w: 384, h: 216, ground: 200, props: ['branchL', 'wire', 'feeder'] },
+  s3: { id: 's3', label: "Moonlit dunes", level: 20, layers: 7, w: 480, h: 270, ground: 240, props: ['branchL', 'branchR'] },
+  v_sodium: { id: 'v_sodium', label: "Sodium city", level: 20, layers: 4, w: 384, h: 216, ground: 205, props: ['branchL', 'wire', 'feeder'] },
+  s4: { id: 's4', label: "Train yard", level: 21, layers: 7, w: 480, h: 270, ground: 234, props: ['branchL', 'wire', 'feeder'] },
+  s4n: { id: 's4n', label: "Train yard at night", level: 21, layers: 7, w: 480, h: 270, ground: 234, props: ['branchL', 'wire', 'feeder'] },
+  fort: { id: 'fort', label: "Castle wall", level: 22, layers: 3, w: 895, h: 272, ground: 208, props: ['branchL', 'wire', 'feeder'] },
+  cold: { id: 'cold', label: "Frozen hall", level: 22, layers: 5, w: 224, h: 224, ground: 214, props: ['branchL', 'wire', 'feeder'] },
+  ind: { id: 'ind', label: "Industrial district", level: 23, layers: 4, w: 544, h: 300, ground: 236, props: ['branchL', 'wire', 'feeder'] },
+  b4: { id: 'b4', label: "Witch's ruin", level: 23, layers: 8, w: 480, h: 270, ground: 250, props: ['branchL', 'branchR'] },
+  cave: { id: 'cave', label: "Crystal cave", level: 24, layers: 9, w: 480, h: 270, ground: 255, props: ['branchL', 'branchR'] },
+  lab: { id: 'lab', label: "Secret lab", level: 24, layers: 3, w: 320, h: 240, ground: 230, props: ['branchL', 'wire', 'feeder'] },
+  bulk: { id: 'bulk', label: "Bulkhead tunnel", level: 25, layers: 4, w: 352, h: 224, ground: 214, props: ['branchL', 'wire', 'feeder'] },
 };
 
 const BY_PHASE: Record<Habitat, Record<DayPhase, [string, string?]>> = {
   urban: { dawn: ['skyline'], morning: ['c2'], day: ['c2'], golden: ['c4'], dusk: ['c4', 'rgba(60,20,70,0.28)'], night: ['neoncity'] },
   woodland: { dawn: ['n1'], morning: ['nfb'], day: ['pine'], golden: ['b3', 'rgba(255,170,60,0.14)'], dusk: ['dusk'], night: ['nfa'] },
-  water: { dawn: ['n2', 'rgba(255,140,120,0.18)'], morning: ['valley'], day: ['n3'], golden: ['n3', 'rgba(255,150,40,0.18)'], dusk: ['n2', 'rgba(110,40,100,0.34)'], night: ['v_tundra', 'rgba(6,8,30,0.45)'] },
+  water: { dawn: ['valley', 'rgba(255,140,120,0.18)'], morning: ['valley'], day: ['n3'], golden: ['n3', 'rgba(255,150,40,0.18)'], dusk: ['valley', 'rgba(110,40,100,0.34)'], night: ['v_tundra', 'rgba(6,8,30,0.45)'] },
 };
 
 export function sceneFor(biome: Habitat, phase: DayPhase): SceneDef {
@@ -58,9 +96,9 @@ export function loadScene(s: SceneDef): Promise<HTMLImageElement[]> {
 }
 
 /** Draw a scene's layers into a view window. `pan` shifts back layers for parallax. */
-function paintLayers(g: CanvasRenderingContext2D, imgs: HTMLImageElement[], s: SceneDef, viewW: number, viewH: number, pan = 0, frontStatic = 2) {
+function paintLayers(g: CanvasRenderingContext2D, imgs: HTMLImageElement[], s: SceneDef, viewW: number, viewH: number, pan = 0, frontStatic = 2, vx0?: number) {
   const top = s.h - viewH;
-  const vx = Math.max(0, Math.floor((s.w - viewW) / 2));
+  const vx = vx0 ?? Math.max(0, Math.floor((s.w - viewW) / 2));
   g.imageSmoothingEnabled = false;
   const n = imgs.length;
   imgs.forEach((im, k) => {
@@ -81,6 +119,32 @@ export async function paintSceneThumb(canvas: HTMLCanvasElement, biome: Habitat,
   const imgs = await loadScene(s);
   canvas.width = viewW; canvas.height = Math.min(viewH, s.h);
   paintLayers(canvas.getContext('2d')!, imgs, s, viewW, canvas.height);
+}
+
+/**
+ * Full-screen living backdrop (onboarding): fits the scene to the canvas's on-screen shape,
+ * frames it around `focus` (0–1 across the scene) and drifts the back layers slowly.
+ */
+export function runBackdrop(canvas: HTMLCanvasElement, id: string, opts: { focus?: number; reduced?: boolean } = {}): () => void {
+  const s = SCENES[id]; if (!s) return () => {};
+  let imgs: HTMLImageElement[] = [];
+  const g = canvas.getContext('2d')!;
+  const fit = () => {
+    const r = canvas.getBoundingClientRect();
+    canvas.height = s.h; canvas.width = Math.max(60, Math.round(s.h * (r.width || 390) / Math.max(1, r.height || 844)));
+  };
+  const paint = (t: number) => {
+    if (!imgs.length) return;
+    const W = canvas.width, vx = Math.max(0, Math.min(Math.max(0, s.w - W), Math.round((opts.focus ?? 0.5) * s.w - W / 2)));
+    g.fillStyle = '#07090B'; g.fillRect(0, 0, W, canvas.height);
+    paintLayers(g, imgs, s, W, canvas.height, opts.reduced ? 0 : Math.sin(t / 9000) * 12, 2, vx);
+  };
+  fit();
+  const ro = new ResizeObserver(() => { fit(); paint(performance.now()); }); ro.observe(canvas);
+  let last = 0;
+  const stop = onTick((t) => { if (t - last < 60) return; last = t; paint(t); });
+  loadScene(s).then((i) => { imgs = i; paint(performance.now()); });
+  return () => { stop(); ro.disconnect(); };
 }
 
 /** Thumbnail of one Bird Home by scene id. */
@@ -201,9 +265,11 @@ export interface Bird {
   t0: number; from: [number, number]; leaveAt: number; flip: boolean; settledAt: number; seed: number;
   blinkAt: number; actionAt: number;
   home?: Perch; eatUntil?: number;
+  hp?: number; hpFrom?: number; hpTo?: number; hpT0?: number; hpT1?: number; // small HP bar, animates while eating
+  returnAt?: number; arc?: number; // fly-about: when to head home, and how high the flight arcs
 }
 
-export interface DioramaOpts { sceneId?: string; frame?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
+export interface DioramaOpts { sceneId?: string; frame?: boolean; hpBars?: boolean; wander?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
 
 export class Diorama {
   private ctx: CanvasRenderingContext2D;
@@ -237,14 +303,53 @@ export class Diorama {
   /** Update the feeder's fill level (0–1). */
   setFeeder(fill: number) { this.opts.feeder = fill; if (this.imgs.length) this.bakeFront(); }
 
-  /** A bird flies to the feeder, pecks for a while, then flies home. */
-  visit(key: string, ms = 2600) {
+  /** A bird flies to the feeder, pecks for a while, then flies home. With `hp`, its bar fills while it eats. */
+  visit(key: string, opts: { ms?: number; hp?: [number, number] } = {}) {
     const b = this.birds.find((x) => x.key === key);
-    if (!b || this.opts.feeder === undefined || b.eatUntil) return;
+    if (!b || this.opts.feeder === undefined || b.eatUntil || b.state !== 'perched') return false;
     const { x, trayY } = feederGeom(this.W, this.H);
-    const spot: Perch = { x: x + (this.birds.filter((o) => o.eatUntil).length % 2 ? 8 : -6), y: trayY, kind: 'perch' };
-    b.home = b.perch; b.from = [b.x, b.y]; b.perch = spot; b.state = 'arriving'; b.t0 = performance.now();
-    b.eatUntil = b.t0 + (this.opts.reduced ? 200 : 1800) + ms; b.flip = spot.x < b.x;
+    const used = new Set(this.birds.filter((o) => o.eatUntil).map((o) => o.perch.x));
+    const spotX = [x - 8, x + 9, x - 1].find((sx) => !used.has(sx));
+    if (spotX === undefined) return false; // the tray holds three
+    const ms = opts.ms ?? 2600;
+    if (b.returnAt) { b.returnAt = undefined; }
+    b.home = b.home ?? b.perch; b.from = [b.x, b.y]; b.perch = { x: spotX, y: trayY, kind: 'perch' }; b.state = 'arriving'; b.t0 = performance.now(); b.arc = 10;
+    const fly = this.opts.reduced ? 200 : 1800;
+    b.eatUntil = b.t0 + fly + ms; b.flip = spotX < b.x;
+    if (opts.hp) { b.hpFrom = opts.hp[0]; b.hpTo = opts.hp[1]; b.hp = opts.hp[0]; b.hpT0 = b.t0 + fly; b.hpT1 = b.eatUntil; }
+    this.onChange?.();
+    return true;
+  }
+  /** Set a bird's HP bar without animation. */
+  setHp(key: string, hp: number) { const b = this.birds.find((x) => x.key === key); if (b) b.hp = hp; }
+
+  /** Ambient life: now and then a bird flies a loop, swaps perch, or two birds snack together. */
+  private wanderAt = 0;
+  private wander(t: number) {
+    if (!this.opts.wander || this.opts.reduced) return;
+    if (!this.wanderAt) { this.wanderAt = t + 3000; return; }
+    if (t < this.wanderAt) return;
+    this.wanderAt = t + 4500 + Math.random() * 5000;
+    const idle = this.birds.filter((b) => b.state === 'perched' && !b.eatUntil && !b.returnAt);
+    if (!idle.length) return;
+    const b = idle[Math.floor(Math.random() * idle.length)];
+    const r = Math.random();
+    if (r < 0.4) {
+      // fly a lap around the aviary, then come back
+      const sky: Perch = { x: Math.round(this.W * (0.15 + Math.random() * 0.7)), y: Math.round(this.H * (0.12 + Math.random() * 0.2)), kind: 'perch' };
+      b.home = b.home ?? b.perch; b.from = [b.x, b.y]; b.perch = sky; b.state = 'arriving'; b.t0 = t; b.arc = 24; b.flip = sky.x < b.x;
+      b.returnAt = t + 1800 + 300;
+    } else if (r < 0.75) {
+      // move to another free spot
+      const free = this.freePerches(b.sp).filter((p) => p !== b.perch);
+      if (!free.length) return;
+      const p = free[Math.floor(Math.random() * free.length)];
+      b.home = undefined; b.from = [b.x, b.y]; b.perch = p; b.state = 'arriving'; b.t0 = t; b.arc = 18; b.flip = p.x < b.x;
+    } else if (this.opts.feeder && this.opts.feeder > 0) {
+      // snack time: up to three birds visit the feeder together
+      const group = idle.sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * Math.min(3, idle.length)));
+      group.forEach((g, i) => setTimeout(() => this.visit(g.key, { ms: 2200 + i * 400 }), i * 350));
+    }
     this.onChange?.();
   }
 
@@ -264,10 +369,13 @@ export class Diorama {
     return this.L.perches.filter((q) => !taken.has(q) && q.kind !== 'water');
   }
 
-  add(key: string, sp: Species, parts: number[], opts: { arrive?: boolean; stay?: number; seed?: number } = {}): Bird | null {
-    const free = this.freePerches(sp);
-    if (!free.length) return null;
+  add(key: string, sp: Species, parts: number[], opts: { arrive?: boolean; stay?: number; seed?: number; hp?: number } = {}): Bird | null {
+    let free = this.freePerches(sp);
     const seed = opts.seed ?? 0;
+    if (!free.length) { // every perch taken: make room on the ground
+      const p: Perch = { x: Math.round(this.W * (0.08 + ((seed * 37) % 84) / 100)), y: this.L.gy, kind: 'ground' };
+      this.L.perches.push(p); free = [p];
+    }
     const perch = free[seed % free.length];
     const now = performance.now();
     const fromLeft = (seed >> 3) % 2 === 0;
@@ -277,7 +385,7 @@ export class Diorama {
       key, sp, frames: renderFrames(sp, parts), perch, x: placed ? perch.x : from[0], y: placed ? perch.y : from[1],
       state: placed ? 'perched' : 'arriving', t0: now, from, leaveAt: opts.stay ? now + opts.stay : Infinity,
       flip: placed ? seed % 2 === 1 : !fromLeft, settledAt: placed ? now : 0, seed,
-      blinkAt: now + 2000 + (seed % 5000), actionAt: now + 4000 + (seed % 7000),
+      blinkAt: now + 2000 + (seed % 5000), actionAt: now + 4000 + (seed % 7000), hp: opts.hp,
     };
     this.birds.push(b);
     this.onChange?.();
@@ -293,10 +401,14 @@ export class Diorama {
         const k = Math.min(1, (t - b.t0) / (this.opts.reduced ? 200 : 1800));
         const e = 1 - (1 - k) * (1 - k);
         b.x = b.from[0] + (b.perch.x - b.from[0]) * e;
-        b.y = b.from[1] + (b.perch.y - b.from[1]) * e;
-        if (k >= 1) { b.state = 'perched'; b.settledAt = t; changed = true; }
+        b.y = b.from[1] + (b.perch.y - b.from[1]) * e - Math.sin(k * Math.PI) * (b.arc ?? 0);
+        if (k >= 1) { b.state = 'perched'; b.settledAt = t; b.arc = 0; changed = true; }
+      } else if (b.state === 'perched' && b.returnAt && t > b.returnAt && b.home) {
+        b.from = [b.x, b.y]; b.perch = b.home; b.home = undefined; b.returnAt = undefined; b.state = 'arriving'; b.t0 = t; b.arc = 16; b.flip = b.perch.x < b.x; changed = true;
       } else if (b.state === 'perched' && b.eatUntil && t > b.eatUntil && b.home) {
-        b.from = [b.x, b.y]; b.perch = b.home; b.home = undefined; b.eatUntil = undefined; b.state = 'arriving'; b.t0 = t; b.flip = b.perch.x < b.x; changed = true;
+        b.from = [b.x, b.y]; b.perch = b.home; b.home = undefined; b.eatUntil = undefined; b.state = 'arriving'; b.t0 = t; b.arc = 12; b.flip = b.perch.x < b.x;
+        if (b.hpTo !== undefined) { b.hp = b.hpTo; b.hpTo = undefined; }
+        changed = true;
       } else if (b.state === 'perched' && t > b.leaveAt) { this.leave(b); changed = true; }
       else if (b.state === 'leaving') {
         const k = (t - b.t0) / 1500;
@@ -305,11 +417,14 @@ export class Diorama {
         if (k >= 1) { b.state = 'gone'; changed = true; }
       }
     }
+    // HP bars fill while eating
+    for (const b of this.birds) if (b.hpTo !== undefined && b.hpT0 && b.hpT1 && t >= b.hpT0) b.hp = b.hpFrom! + (b.hpTo - b.hpFrom!) * Math.min(1, (t - b.hpT0) / (b.hpT1 - b.hpT0));
+    this.wander(t);
     if (changed) { this.birds = this.birds.filter((b) => b.state !== 'gone'); this.onChange?.(); }
   }
 
   frameFor(b: Bird, t: number): number {
-    if (b.state !== 'perched') return 8 + (Math.floor(t / 83) % 6);
+    if (b.state !== 'perched' || b.returnAt) return 8 + (Math.floor(t / 83) % 6);
     if (b.eatUntil && t < b.eatUntil) return Math.floor(t / 180) % 2 ? 6 : 0; // pecking at the feeder
     if (this.opts.reduced) return 0;
     if (t > b.blinkAt) { if (t > b.blinkAt + 170) b.blinkAt = t + 4000 + ((b.seed * 7919 + t) % 3000); else return 4; }
@@ -348,7 +463,32 @@ export class Diorama {
       } else drawFrame(g, f, x, y, 1, b.flip);
     }
     if (this.scene.tint) { g.fillStyle = this.scene.tint; g.fillRect(0, 0, this.W, this.H); }
+    if (this.opts.hpBars) {
+      const placed: [number, number][] = [];
+      for (const b of sorted.slice().sort((a, c) => a.x - c.x)) {
+        let lift = 0; const bx = Math.round(b.x), by = Math.round(b.y);
+        while (placed.some(([px, py]) => Math.abs(px - bx) < 16 && Math.abs(py - (by - lift)) < 4) && lift < 12) lift += 4;
+        placed.push([bx, by - lift]);
+        this.drawHp(g, b, t, lift);
+      }
+    }
     if (this.opts.frame) paintWindowFrame(g, this.W, this.H);
+  }
+
+  /** Tiny floating HP bar over the bird's head; glows and shows a "+" while it fills. */
+  private drawHp(g: CanvasRenderingContext2D, b: Bird, t: number, lift = 0) {
+    if (b.hp === undefined || b.state === 'gone') return;
+    const w = 14, x = Math.round(b.x - w / 2), y = Math.max(2, Math.round(b.y - 36 - lift + (b.state === 'perched' && !b.returnAt ? Math.floor(t / 500) % 2 : 0)));
+    const v = Math.max(0, Math.min(100, b.hp)) / 100;
+    const filling = b.hpTo !== undefined && b.hpT0 !== undefined && t >= b.hpT0;
+    const col = v > 0.5 ? '#7CE85A' : v > 0.25 ? '#F2C230' : '#E8533C';
+    g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, w + 2, 4);
+    g.fillStyle = '#2A333D'; g.fillRect(x, y, w, 2);
+    g.fillStyle = filling && Math.floor(t / 120) % 2 ? '#E9FF70' : col; g.fillRect(x, y, Math.max(v > 0 ? 1 : 0, Math.round(w * v)), 2);
+    if (filling) { // little rising "+"
+      const k = ((t - b.hpT0!) % 700) / 700, py = Math.round(y - 3 - k * 6);
+      g.fillStyle = `rgba(233,255,112,${1 - k})`; g.fillRect(x + w + 2, py, 3, 1); g.fillRect(x + w + 3, py - 1, 1, 3);
+    }
   }
 
   hit(lx: number, ly: number): Bird | null {

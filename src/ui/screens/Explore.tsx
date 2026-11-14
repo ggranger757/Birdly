@@ -6,7 +6,7 @@ import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs } from '../../data/provider';
 import { likelyNow } from '../../core/rarity';
 import { sunTimes, dayPhase, DayPhase } from '../../core/sun';
-import { liveStreak, dayKey, rankFor } from '../../core/xp';
+import { liveStreak, dayKey, rankFor, trainerLevel } from '../../core/xp';
 import { fetchWeather, Weather } from '../../app/net';
 import { renderFrames, defaultParts } from '../../core/pixel/sprite';
 import { frameImage, Icon, RarityTag, Sheet } from '../components';
@@ -162,7 +162,7 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
       <div className="map-overlay" style={{ left: 10, top: 'calc(54px + var(--safe-t))', display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '75%' }}>
         {state === 'loading' && <span className="chip">Scanning for birds…</span>}
         {state === 'ok' && <span className="chip sun">{info.n} sightings nearby · 30 days</span>}
-        {state === 'ok' && info.hidden > 0 && <span className="chip" style={{ background: 'rgba(10,12,15,.88)' }}>{info.hidden} sensitive hidden</span>}
+        {state === 'ok' && info.hidden > 0 && <span className="chip map-pill">{info.hidden} sensitive hidden</span>}
         {state === 'offline' && <span className="chip">Offline — map needs a connection</span>}
         {state === 'error' && <span className="chip">Couldn’t load sightings</span>}
         {tilesFailed && <span className="chip">Map images couldn’t load — check your connection</span>}
@@ -206,8 +206,8 @@ export function Explore() {
       <BirdMap regionCode={st.region} onOpen={openSp} onData={setFeed} refreshKey={refreshKey} />
       {/* HUD: who you are, streak, money */}
       <div className="hud" style={{ right: 110 }}>
-        <button className="chip" onClick={() => nav.setTab('you')} aria-label={`Trainer ${st.trainerName}, level ${rank.index + 1}`}>
-          <b style={{ color: 'var(--accent)', fontWeight: 400 }}>Lv{rank.index + 1}</b> {st.trainerName || 'Trainer'}
+        <button className="chip" onClick={() => nav.setTab('you')} aria-label={`Trainer ${st.trainerName}, level ${trainerLevel(st.xp).level}`}>
+          <b style={{ color: 'var(--accent)', fontWeight: 400 }}>Lv{trainerLevel(st.xp).level}</b> {st.trainerName || 'Trainer'}
         </button>
         <span className="chip" aria-label={`${streak.days}-day streak`}><Icon name="flame" size={12} color={streak.days ? 'var(--oriole)' : 'var(--ash)'} />{streak.days}</span>
         <FeatherChip />
@@ -219,7 +219,7 @@ export function Explore() {
           <div className="row between" style={{ marginBottom: 8 }}>
             <button className="row" style={{ background: 'none', border: 0, padding: 0, color: 'inherit', textAlign: 'left', minHeight: 44 }} onClick={() => { sfx.tap(); setPickRegion(true); }} aria-label={`Region ${regionLabel(st.region)}. Change`}>
               <span style={{ fontSize: 24 }} aria-hidden>{region.flag}</span>
-              <span><b>{region.name}</b> <span className="small" style={{ color: 'var(--accent)' }}>▾</span><br />
+              <span><b>{region.name}</b> <span className="region-change" aria-hidden>Change <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 4h10v2H10v2H8v2H6V8H4V6H2z" fill="currentColor" /></svg></span><br />
                 <span className="small muted">{wx ? `${wx.label}${wx.tempC !== undefined ? ` ${wx.tempC}°C` : ''} · ` : ''}{PHASE_LINE[phase].split(' — ')[0]}</span></span>
             </button>
             <button className="chip" onClick={() => nav.setTab('dex')} aria-label={`BirdDex ${have} of ${entries.length}`}>Dex {have}/{entries.length}</button>

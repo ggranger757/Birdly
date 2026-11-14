@@ -33,7 +33,7 @@ export function RegionPicker({ value, onPick, compact }: { value?: string; onPic
     <div className="row" style={{ gap: 8 }}>
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label={step === 'country' ? 'Search countries' : 'Search states and provinces'}
         placeholder={step === 'country' ? 'Search 250 countries…' : 'Search states, provinces, regions…'}
-        style={{ flex: 1, minHeight: 48, padding: '8px 12px', background: '#000', border: '2px solid var(--smoke)', borderRadius: 0, fontSize: 16 }} />
+        style={{ flex: 1, minHeight: 48, padding: '8px 12px', background: 'var(--well)', border: '2px solid var(--smoke)', borderRadius: 0, fontSize: 16 }} />
     </div>
   );
 

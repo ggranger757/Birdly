@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
+import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
 import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
 import { getRegion, regionLabel } from '../../data/geo';
 import { allKnownSpecies } from '../../data/provider';
 import { gameMusic } from '../../app/audio';
-import { Types, BirdThumb, dexNo, BadgeIcon, HpBar } from '../game';
+import { Types, BirdThumb, dexNo, BadgeIcon, HpBar, Capsule } from '../game';
+import { LENSES, LENS_ORDER } from '../../core/lenses';
 import { PageHeader, Segmented, Alert, FeatherChip } from '../kit';
-import { Druid } from '../Characters';
+import { Professor } from '../Characters';
 import { Diorama, SCENES, paintHomeThumb } from '../../render/diorama';
 import { sunTimes, dayPhase } from '../../core/sun';
-import { rankFor, RANKS, liveStreak, dayKey } from '../../core/xp';
+import { rankFor, RANKS, liveStreak, dayKey, trainerLevel } from '../../core/xp';
 import { BADGES, TIER_FEATHERS } from '../../core/badges';
 import { challengeProgress } from '../../core/challenges';
 import type { Habitat } from '../../data/types';
@@ -18,7 +19,7 @@ import { Sprite, Meter, Icon, useReducedMotion, Sheet, RarityTag } from '../comp
 import { sfx, haptic, playClip } from '../../app/audio';
 
 // ─── AVIARY: your birds living in a scene, kept fed from the feeder ───
-const SHOP_THANKS = ['A fine choice. Your birds will sing for it.', 'Into the bag it goes! Fill that feeder.', 'The forest thanks you, friend.', 'Fresh from the old woods. Enjoy!'];
+const SHOP_THANKS = ['A fine choice. Your birds will sing for it.', 'Into the bag it goes! Fill that feeder.', 'Splendid! The birds thank you.', 'Fresh seed, straight from my larder. Enjoy!'];
 
 export function HabitatTab() {
   useEffect(() => { gameMusic('aviary'); }, []);
@@ -38,6 +39,7 @@ export function HabitatTab() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [, tick] = useState(0);
   const species = speciesCount(st);
+  const lv = trainerLevel(st.xp).level;
   const region = getRegion(st.region);
   const now = new Date();
   const phase = dayPhase(now, sunTimes(now, region.lat, region.lng));
@@ -47,10 +49,16 @@ export function HabitatTab() {
 
   // birds visit the feeder: on open, every 20s, and right after you fill it
   const runFeeder = () => {
+    const before = new Map(getState().sightings.map((x) => [x.id, hpNow(x)]));
     const m = tickFeeder();
     if (!m.length) return;
     setMeals(m);
-    m.forEach((meal, i) => setTimeout(() => dio.current?.visit(meal.id), i * 700));
+    // up to three hungry birds eat side by side; the rest queue for the next free spot
+    m.forEach((meal, i) => setTimeout(() => {
+      const from = Math.round(before.get(meal.id) ?? 50), to = Math.min(100, from + meal.ate);
+      const go = (tries: number) => { if (!dio.current) return; if (!dio.current.visit(meal.id, { ms: 3200, hp: [from, to] })) { if (tries > 0) setTimeout(() => go(tries - 1), 1500); else dio.current.setHp(meal.id, to); } };
+      go(6);
+    }, Math.floor(i / 3) * 4200 + (i % 3) * 300));
     sfx.sparkle();
   };
   useEffect(() => {
@@ -62,12 +70,12 @@ export function HabitatTab() {
   useEffect(() => { const w = boxRef.current?.clientWidth ?? 358; setDims({ w: Math.floor(w / 2), h: Math.floor(Math.min(window.innerHeight * 0.46, 480) / 2) }); }, []);
   useEffect(() => {
     if (!dims) return;
-    const d = new Diorama(ref.current!, st.diorama.biome, phase, { sceneId: st.diorama.home, reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
+    const d = new Diorama(ref.current!, st.diorama.biome, phase, { sceneId: st.diorama.home && (SCENES[st.diorama.home]?.level ?? 99) <= lv ? st.diorama.home : undefined, hpBars: true, wander: true, reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
     dio.current = d;
     setSceneLabel(d.scene.label);
     const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
     if (partner && st.partner) d.add('partner', partner, st.partner.parts, { arrive: false, seed: 1 });
-    aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3 }));
+    aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3, hp: hpNow(s) }));
     d.start();
     return () => { d.dispose(); dio.current = null; };
   }, [st.diorama.biome, st.diorama.home, aviary.map((p) => p.id).join(), reduced, dims]);
@@ -135,7 +143,7 @@ export function HabitatTab() {
           <div className="section-title"><span>Pantry</span><span>{bags} bag{bags === 1 ? '' : 's'}</span></div>
           <div className="row" style={{ gap: 8 }}>
             {(Object.keys(FOODS) as Food[]).map((f) => (
-              <div key={f} className="grow" style={{ textAlign: 'center', background: '#000', border: '2px solid var(--slate)', padding: 6 }}>
+              <div key={f} className="grow" style={{ textAlign: 'center', background: 'var(--well)', border: '2px solid var(--slate)', padding: 6 }}>
                 <div style={{ fontSize: 22 }} aria-hidden>{FOODS[f].icon}</div>
                 <div className="small">{FOODS[f].name}</div><div className="num" style={{ color: 'var(--accent)' }}>×{st.items[f]}</div>
               </div>
@@ -143,7 +151,7 @@ export function HabitatTab() {
           </div>
           <div className="row mt16">
             <button className="btn primary grow" onClick={() => setSheet('fill')} disabled={st.feeder.level >= FEEDER_CAP || bags === 0}>Fill feeder</button>
-            <button className="btn grow" onClick={() => setSheet('shop')}>Food shop</button>
+            <button className="btn grow" onClick={() => setSheet('shop')}>Shop: food &amp; lenses</button>
           </div>
           <p className="small muted">Buy food with Feathers. Earn Feathers by photographing real birds: +20 for a new species, +12 for a repeat.</p>
         </section>
@@ -153,19 +161,22 @@ export function HabitatTab() {
       {sheet === 'homes' && (
         <Sheet onClose={() => setSheet(null)} label="Bird Homes">
           <h3 className="mb8">Bird Homes</h3>
-          <p className="small muted" style={{ marginTop: 0 }}>Pick where your birds live. Your feeder comes with you.</p>
+          <p className="small muted" style={{ marginTop: 0 }}>Pick where your birds live. Level up by discovering birds to unlock more homes. You're Lv {lv}: {Object.values(SCENES).filter((h) => h.level <= lv).length} of {Object.keys(SCENES).length} unlocked.</p>
           <button className={`panel ${!st.diorama.home ? 'highlight' : ''}`} style={{ width: '100%', margin: '0 0 10px', textAlign: 'left' }} aria-pressed={!st.diorama.home}
             onClick={() => { sfx.select(); setHome(undefined); }}>
             <span className="name">Changes with the day</span><br /><span className="small muted">A {st.habitat === 'urban' ? 'city' : st.habitat === 'woodland' ? 'woodland' : 'wetland'} home that shifts from dawn to night</span>
           </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {Object.values(SCENES).map((sc) => (
-              <button key={sc.id} className={`home-card ${st.diorama.home === sc.id ? 'on' : ''}`} aria-pressed={st.diorama.home === sc.id}
-                onClick={() => { sfx.select(); haptic(8); setHome(sc.id); }}>
-                <HomeThumb id={sc.id} />
-                <span className="small">{sc.label}</span>
-              </button>
-            ))}
+            {Object.values(SCENES).map((sc) => {
+              const locked = sc.level > lv;
+              return (
+                <button key={sc.id} className={`home-card ${st.diorama.home === sc.id ? 'on' : ''} ${locked ? 'locked' : ''}`} aria-pressed={st.diorama.home === sc.id} disabled={locked}
+                  onClick={() => { sfx.select(); haptic(8); setHome(sc.id); }}>
+                  <HomeThumb id={sc.id} />
+                  <span className="small">{locked ? `🔒 Lv ${sc.level}` : sc.label}</span>
+                </button>
+              );
+            })}
           </div>
         </Sheet>
       )}
@@ -190,11 +201,11 @@ export function HabitatTab() {
         </Sheet>
       )}
       {sheet === 'shop' && (
-        <Sheet onClose={() => setSheet(null)} label="Food shop">
-          <div className="row between mb8"><h3>Rowan's Feed Store</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
+        <Sheet onClose={() => setSheet(null)} label="Merlin's Shop">
+          <div className="row between mb8"><h3>Merlin's Shop</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
           <div className="npc mb8">
-            <Druid act={shopCast ? 'cast' : 'idle'} actKey={shopCast} />
-            <div className="bubble"><b>Rowan</b>{shopLine}</div>
+            <div key={shopCast} className={shopCast ? 'npc-hop' : ''}><Professor height={96} /></div>
+            <div className="bubble"><b>Professor Merlin</b>{shopLine}</div>
           </div>
           {(Object.keys(FOODS) as Food[]).map((f) => (
             <div key={f} className="srow">
@@ -205,6 +216,23 @@ export function HabitatTab() {
               </button>
             </div>
           ))}
+          <div className="section-title"><span>Snap Lenses</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>Each records birds with its own effect</span></div>
+          {LENS_ORDER.map((id) => {
+            const l = LENSES[id]; const owned = st.lenses.includes(id); const on = st.lens === id;
+            return (
+              <div key={id} className="srow">
+                <span className="lens-ico" aria-hidden><Capsule size={32} lens={id} /></span>
+                <span className="grow"><span className="name">{l.name}</span>{on && <span className="small" style={{ color: 'var(--accent)' }}> · in use</span>}<br /><span className="small muted">{l.desc}</span></span>
+                {owned ? (
+                  <button className="btn small" disabled={on} onClick={() => { equipLens(id); sfx.select(); setShopLine(`The ${l.name} is ready. Go and find a bird!`); }}>{on ? 'Using' : 'Use'}</button>
+                ) : (
+                  <button className="btn small primary" disabled={st.feathers < l.price} onClick={() => { if (buyLens(id)) { playClip('buy'); setShopCast((k) => k + 1); setShopLine(`The ${l.name}! Your next bird will be recorded in style.`); nav.toast(`Bought ${l.name}`); } }}>
+                    {l.price} <Icon name="feather" size={10} color="var(--accent-ink)" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
           <p className="small muted">Earn Feathers by discovering real birds (+12, or +20 for a new species), finishing quests, earning badges, and keeping your Aviary healthy.</p>
           <button className="btn block" onClick={() => setSheet('fill')}>Fill the feeder</button>
         </Sheet>
@@ -259,13 +287,13 @@ export function YouTab() {
   return (
     <div className="screen with-tabs">
       <PageHeader title="Trainer" right={<><FeatherChip /><button className="icon-btn" aria-label="Settings" onClick={() => nav.open({ name: 'settings' })}><Icon name="gear" size={22} /></button></>} />
-      <div className="panel" style={{ background: 'linear-gradient(135deg, #1B2229, #11151A 60%)', borderColor: 'var(--accent)' }}>
+      <div className="panel" style={{ background: 'linear-gradient(135deg, var(--slate), var(--plum) 60%)', borderColor: 'var(--accent)' }}>
         <div className="row" style={{ alignItems: 'flex-start', gap: 14 }}>
           {partner && st.partner && <div style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={partner} parts={st.partner.parts} scale={3} /></div>}
           <div className="grow" style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: 18 }}>{st.trainerName || 'Trainer'}</h2>
             <div className="small muted">{region.flag} {regionLabel(st.region)}</div>
-            <div className="mt8"><span className="chip sun">Lv {rank.index + 1}</span> <span className="px small">{rank.name}</span></div>
+            <div className="mt8"><span className="chip sun">Lv {trainerLevel(st.xp).level}</span> <span className="px small">{rank.name}</span></div>
             {partner && <div className="small mt8">Partner: <b>{partner.common}</b></div>}
           </div>
         </div>
@@ -288,8 +316,8 @@ export function YouTab() {
       {section === 'quests' && (
         <section aria-label="Quests">
           <div className="npc mb8">
-            <Druid act={questCast ? 'cast' : 'idle'} actKey={questCast} />
-            <div className="bubble"><b>Rowan · Quests</b>{claimable ? `You have ${claimable} quest${claimable > 1 ? 's' : ''} to hand in. Claim your reward!` : 'Head out and find birds. I will reward you for every quest you finish.'}</div>
+            <div key={questCast} className={questCast ? 'npc-hop' : ''}><Professor height={96} /></div>
+            <div className="bubble"><b>Professor Merlin · Quests</b>{claimable ? `You have ${claimable} quest${claimable > 1 ? 's' : ''} to hand in. Claim your reward!` : 'Head out and find birds. I will reward you for every quest you finish.'}</div>
           </div>
           {slots.map(({ slot, kind }) => {
             const p = challengeProgress(st, slot, now);
@@ -321,7 +349,7 @@ export function YouTab() {
                 {BADGES.filter((b) => b.category === c).map((b) => {
                   const got = st.badges[b.id]; const p = Math.min(b.goal, b.progress(st));
                   return (
-                    <div key={b.id} title={`${b.name}: ${b.desc}`} style={{ textAlign: 'center', background: '#0D1014', border: `2px solid ${got ? tierColor[b.tier] : '#000'}`, padding: '6px 2px' }}>
+                    <div key={b.id} title={`${b.name}: ${b.desc}`} style={{ textAlign: 'center', background: 'var(--well-2)', border: `2px solid ${got ? tierColor[b.tier] : '#000'}`, padding: '6px 2px' }}>
                       <BadgeIcon icon={b.icon} earned={!!got} size={44} label={`${b.name}, ${b.desc}, ${got ? 'earned' : `${p} of ${b.goal}`}`} />
                       <div style={{ fontSize: 10, lineHeight: '12px', marginTop: 2 }}>{b.name}</div>
                       <div className="num" style={{ fontSize: 9, color: got ? tierColor[b.tier] : 'var(--ash)' }}>{got ? b.tier : `${p}/${b.goal}`}</div>

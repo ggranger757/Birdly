@@ -37,8 +37,8 @@ A sprite lab (every species, every animation frame, silhouette test) lives at `#
 
 - `public/bg/`: layered parallax backgrounds (owner-supplied).
 - `public/badges/`: 24 owner-supplied badge icons + capture effect, and 24 generated achievement badges (`b-*.png`). Regenerate or edit the generated ones with `python3 scripts/gen-badges.py` (frames per category, metals per tier, ASCII-art emblems).
+- `public/fx/*.png`: Snap Lens effect sheets (ripple, bubble, ember, arcane, phantom).
 - `public/chars/merlin.png`: Professor Merlin (48px cells; row 0 is the wing-flap hover).
-- `public/chars/druid.png`: Rowan the druid, shopkeeper and quest-giver (84px cells; rows: idle, run, hurt, vanish, staff sweep, leap).
 - `public/music/main-theme.mp3`: the main theme (title, Explore, Trainer). Streamed, looped and cached on first play.
 
 ## Data, privacy and licensing
@@ -49,5 +49,5 @@ A sprite lab (every species, every animation frame, silhouette test) lives at `#
 - The species seed (`src/data/species.ts`) is hand-curated. Frequencies are coarse seed estimates for spawn weighting, not survey data. If you monetise, independently license your data and review the iNaturalist/Open-Meteo terms first. The eBird API is non-commercial only and is **not** used.
 - Background art, badge icons and professor sprite were supplied by the project owner; confirm their licences before distributing.
 - Country/state list: countries-states-cities-database (ODbL 1.0); attribution required, derived data stays under ODbL.
-- Map tiles © OpenStreetMap contributors © CARTO (free for non-commercial use). Reverse geocoding by BigDataCloud's free client API.
+- Map tiles © OpenStreetMap contributors (ODbL; standard tile servers, no key). Reverse geocoding by BigDataCloud's free client API.
 - Fonts: Silkscreen, Inter, Atkinson Hyperlegible (SIL OFL).
