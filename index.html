@@ -13,6 +13,13 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>PIXEL BIRDER</title>
     <style>html,body{background:#0A0C0F;margin:0}</style>
+    <!--gh-pages-redirect-->
+    <script>
+      // This is the source page. On GitHub Pages (no port) with Pages set to the repo root,
+      // send visitors to the prebuilt app in /docs. The build strips this block from docs/index.html.
+      if (!location.port) location.replace('./docs/' + location.hash);
+    </script>
+    <!--/gh-pages-redirect-->
   </head>
   <body>
     <div id="root"></div>

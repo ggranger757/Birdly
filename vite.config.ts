@@ -9,6 +9,11 @@ export default defineConfig({
   base: './',
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
+    {
+      name: 'strip-gh-redirect',
+      apply: 'build',
+      transformIndexHtml: (html: string) => html.replace(/\s*<!--gh-pages-redirect-->[\s\S]*?<!--\/gh-pages-redirect-->/, ''),
+    },
     react(),
     VitePWA({
       registerType: 'autoUpdate',
