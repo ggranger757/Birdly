@@ -37,6 +37,11 @@ export function Dex() {
   const pending = st.sightings.filter((s) => !counts(s));
   const present = new Set(entries.flatMap((e) => typesOf(e.sp)));
   const groups = GROUP_TYPES.filter((t) => present.has(t));
+  // each group: how many birds, and the most familiar local example, so the menu explains itself
+  const groupInfo = (t: BirdType) => {
+    const list = entries.filter((e) => typesOf(e.sp)[0] === t);
+    return { n: list.length, example: list[0]?.sp.common };
+  };
 
   const shown = entries.filter((e) => {
     const caught = mine.has(e.sp.id);
@@ -66,7 +71,7 @@ export function Dex() {
         <label className="grow"><span className="sr-only">Bird group</span>
           <select className="filter" style={{ width: '100%' }} value={group} onChange={(e) => setGroup(e.target.value as BirdType | '')}>
             <option value="">All bird groups</option>
-            {groups.map((t) => <option key={t} value={t}>{GROUP_PLURAL[t]}</option>)}
+            {groups.map((t) => { const g = groupInfo(t); return <option key={t} value={t}>{GROUP_PLURAL[t]} · {g.n}{g.example ? ` (e.g. ${g.example})` : ''}</option>; })}
           </select>
         </label>
         <label className="grow"><span className="sr-only">Where they live</span>

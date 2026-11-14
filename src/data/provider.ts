@@ -33,7 +33,7 @@ const RULES: [RegExp, Plan][] = [
   [/nightjar|nighthawk|poorwill|whip-poor-will|potoo/i, { archetype: 'owl', family: 'Caprimulgidae', familyName: 'Nightjars', order: 'Caprimulgiformes', habitats: ['woodland'], activity: 'nocturnal', shape: { brx: 7.5, bry: 5, hr: 4.5 } }],
   [/eagle|hawk|kite|buzzard|harrier|osprey|vulture|condor|goshawk|sparrowhawk|accipiter/i, { archetype: 'raptor', family: 'Accipitridae', familyName: 'Hawks, eagles and kites', order: 'Accipitriformes', habitats: ['woodland', 'urban'], sensitive: true }],
   [/falcon|kestrel|merlin|hobby|caracara/i, { archetype: 'raptor', family: 'Falconidae', familyName: 'Falcons', order: 'Falconiformes', habitats: ['urban', 'woodland'], sensitive: true, shape: { brx: 5, bry: 6.5, hr: 3.6 } }],
-  [/hummingbird|hermit|sunangel|woodstar|emerald|sapphire|brilliant|mango|violetear|sylph|coquette/i, { archetype: 'hummingbird', family: 'Trochilidae', familyName: 'Hummingbirds', order: 'Apodiformes', habitats: ['urban', 'woodland'] }],
+  [/hummingbird|hermit\b(?! thrush| warbler)|sunangel|woodstar|emerald|sapphire|brilliant|mango|violetear|sylph|coquette/i, { archetype: 'hummingbird', family: 'Trochilidae', familyName: 'Hummingbirds', order: 'Apodiformes', habitats: ['urban', 'woodland'] }],
   [/swift\b/i, { archetype: 'hummingbird', family: 'Apodidae', familyName: 'Swifts', order: 'Apodiformes', habitats: ['urban'], shape: { beak: 'cone', beakLen: 2, brx: 5.5, wingSpan: 13 } }],
   [/parrot|parakeet|macaw|lorikeet|lorikeet|cockatoo|cockatiel|conure|lovebird|amazon|galah|corella|rosella|budgerigar/i, { archetype: 'parrot', family: 'Psittacidae', familyName: 'Parrots', order: 'Psittaciformes', habitats: ['urban', 'woodland'] }],
   [/kingfisher|kookaburra/i, { archetype: 'kingfisher', family: 'Alcedinidae', familyName: 'Kingfishers', order: 'Coraciiformes', habitats: ['water', 'woodland'] }],
@@ -182,16 +182,22 @@ export async function getJSON(url: string, ms = 9000) {
 }
 
 /** Find the iNaturalist place for a region (state/province or country). */
-async function placeFor(code: string): Promise<number | null> {
+export async function placeFor(code: string): Promise<number | null> {
   const r = getRegion(code);
   const q = r.name === r.countryName ? r.countryName : r.name;
   const j = await getJSON(`${API}/places/autocomplete?q=${encodeURIComponent(q)}&per_page=20`);
   const want = r.name === r.countryName ? 0 : 10;
   const results: any[] = j.results ?? [];
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const match = results.find((p) => p.admin_level === want && norm(p.display_name ?? p.name).includes(norm(r.countryName)) && norm(p.name) === norm(q))
-    ?? results.find((p) => p.admin_level === want && norm(p.name) === norm(q))
-    ?? results.find((p) => p.admin_level === want && norm(p.display_name ?? '').includes(norm(r.countryName)));
+  // Same-named places exist in several countries (e.g. Maryland, US vs Maryland, Liberia):
+  // states are listed as "Name, CC", so the country code decides.
+  const inCountry = (p: any) => {
+    const d = norm(p.display_name ?? '');
+    return d.endsWith(`, ${r.country.toLowerCase()}`) || d.includes(`, ${r.country.toLowerCase()},`) || d.includes(norm(r.countryName));
+  };
+  const match = results.find((p) => p.admin_level === want && norm(p.name) === norm(q) && (want === 0 || inCountry(p)))
+    ?? results.find((p) => p.admin_level === want && inCountry(p) && norm(p.display_name ?? '').startsWith(norm(q)))
+    ?? (want === 0 ? results.find((p) => p.admin_level === 0 && norm(p.name) === norm(q)) : undefined);
   return match?.id ?? null;
 }
 
@@ -203,7 +209,7 @@ function countsQuery(loc: string, extra = '') {
 export async function ensureRegion(code: string, force = false): Promise<void> {
   if (status.get(code) === 'loading') return;
   if (!memory.has(code)) {
-    try { const c = await getRef<Cached>(`region:${code}`); if (c) { memory.set(code, c); registerSpecies(c.taxa); status.set(code, 'cached'); emit(); } } catch { /* ignore */ }
+    try { const c = await getRef<Cached>(`region2:${code}`); if (c) { memory.set(code, c); registerSpecies(c.taxa); status.set(code, 'cached'); emit(); } } catch { /* ignore */ }
   }
   const have = memory.get(code);
   if (have && !force && Date.now() - have.at < TTL) return;
@@ -234,7 +240,7 @@ export async function ensureRegion(code: string, force = false): Promise<void> {
     };
     if (!cached.year.length) throw new Error('empty');
     memory.set(code, cached); registerSpecies(taxa);
-    putRef(`region:${code}`, cached).catch(() => {});
+    putRef(`region2:${code}`, cached).catch(() => {});
     status.set(code, 'live');
   } catch {
     status.set(code, have ? 'cached' : 'error');

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, counts, speciesOf, speciesCount, setBiome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
+import { useGame, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
 import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
 import { getRegion, regionLabel } from '../../data/geo';
 import { allKnownSpecies } from '../../data/provider';
-import { music } from '../../app/audio';
+import { gameMusic } from '../../app/audio';
 import { Types, BirdThumb, dexNo, BadgeIcon, HpBar } from '../game';
 import { PageHeader, Segmented, Alert, FeatherChip } from '../kit';
 import { Druid } from '../Characters';
-import { Diorama } from '../../render/diorama';
+import { Diorama, SCENES, paintHomeThumb } from '../../render/diorama';
 import { sunTimes, dayPhase } from '../../core/sun';
 import { rankFor, RANKS, liveStreak, dayKey } from '../../core/xp';
 import { BADGES, TIER_FEATHERS } from '../../core/badges';
@@ -21,7 +21,7 @@ import { sfx, haptic, playClip } from '../../app/audio';
 const SHOP_THANKS = ['A fine choice. Your birds will sing for it.', 'Into the bag it goes! Fill that feeder.', 'The forest thanks you, friend.', 'Fresh from the old woods. Enjoy!'];
 
 export function HabitatTab() {
-  useEffect(() => { music('aviary'); }, []);
+  useEffect(() => { gameMusic('aviary'); }, []);
   const nav = useNav();
   const st = useGame((s) => s);
   const reduced = useReducedMotion();
@@ -29,7 +29,7 @@ export function HabitatTab() {
   const boxRef = useRef<HTMLDivElement>(null);
   const dio = useRef<Diorama | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | null>(null);
+  const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | 'homes' | null>(null);
   const [section, setSection] = useState<'birds' | 'feeder'>('birds');
   const [shopCast, setShopCast] = useState(0);
   const [shopLine, setShopLine] = useState('Seeds, berries, mealworms! Fair prices, paid in Feathers.');
@@ -44,10 +44,6 @@ export function HabitatTab() {
   const aviary = st.diorama.birds.map((id) => st.sightings.find((s) => s.id === id)).filter(Boolean) as typeof st.sightings;
   const box = st.sightings.filter((s) => !st.diorama.birds.includes(s.id));
   const fill = st.feeder.level / FEEDER_CAP;
-  const biomes: { b: Habitat; label: string; need: number }[] = [
-    { b: st.habitat, label: 'Home patch', need: 0 },
-    ...(['urban', 'woodland', 'water'] as Habitat[]).filter((b) => b !== st.habitat).map((b) => ({ b, label: b === 'urban' ? 'Urban' : b === 'woodland' ? 'Woodland' : 'Wetland', need: 10 })),
-  ];
 
   // birds visit the feeder: on open, every 20s, and right after you fill it
   const runFeeder = () => {
@@ -66,7 +62,7 @@ export function HabitatTab() {
   useEffect(() => { const w = boxRef.current?.clientWidth ?? 358; setDims({ w: Math.floor(w / 2), h: Math.floor(Math.min(window.innerHeight * 0.46, 480) / 2) }); }, []);
   useEffect(() => {
     if (!dims) return;
-    const d = new Diorama(ref.current!, st.diorama.biome, phase, { reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
+    const d = new Diorama(ref.current!, st.diorama.biome, phase, { sceneId: st.diorama.home, reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
     dio.current = d;
     setSceneLabel(d.scene.label);
     const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
@@ -74,7 +70,7 @@ export function HabitatTab() {
     aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3 }));
     d.start();
     return () => { d.dispose(); dio.current = null; };
-  }, [st.diorama.biome, aviary.map((p) => p.id).join(), reduced, dims]);
+  }, [st.diorama.biome, st.diorama.home, aviary.map((p) => p.id).join(), reduced, dims]);
   useEffect(() => { dio.current?.setFeeder(fill); }, [fill]);
 
   const hungry = aviary.filter((x) => hpNow(x) < 30).length;
@@ -119,12 +115,8 @@ export function HabitatTab() {
           })}
           <button className="btn block" onClick={() => setSheet('box')}>Bird Box · {box.length} resting</button>
           <p className="small muted">Aviary birds eat from the feeder and earn you Feathers. Birds in the Bird Box rest and don't get hungry.</p>
-          <div className="section-title"><span>Scene</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{sceneLabel}</span></div>
-          <div className="hscroll">
-            {biomes.map(({ b, label, need }) => (
-              <button key={b} className="filter" aria-pressed={st.diorama.biome === b} disabled={species < need} onClick={() => setBiome(b)}>{label}{species < need ? ` · ${need} species` : ''}</button>
-            ))}
-          </div>
+          <div className="section-title"><span>Bird Home</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{sceneLabel}</span></div>
+          <button className="btn block" onClick={() => setSheet('homes')}>Change Bird Home</button>
         </section>
       )}
 
@@ -157,6 +149,26 @@ export function HabitatTab() {
         </section>
       )}
 
+
+      {sheet === 'homes' && (
+        <Sheet onClose={() => setSheet(null)} label="Bird Homes">
+          <h3 className="mb8">Bird Homes</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>Pick where your birds live. Your feeder comes with you.</p>
+          <button className={`panel ${!st.diorama.home ? 'highlight' : ''}`} style={{ width: '100%', margin: '0 0 10px', textAlign: 'left' }} aria-pressed={!st.diorama.home}
+            onClick={() => { sfx.select(); setHome(undefined); }}>
+            <span className="name">Changes with the day</span><br /><span className="small muted">A {st.habitat === 'urban' ? 'city' : st.habitat === 'woodland' ? 'woodland' : 'wetland'} home that shifts from dawn to night</span>
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {Object.values(SCENES).map((sc) => (
+              <button key={sc.id} className={`home-card ${st.diorama.home === sc.id ? 'on' : ''}`} aria-pressed={st.diorama.home === sc.id}
+                onClick={() => { sfx.select(); haptic(8); setHome(sc.id); }}>
+                <HomeThumb id={sc.id} />
+                <span className="small">{sc.label}</span>
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
 
       {sheet === 'fill' && (
         <Sheet onClose={() => setSheet(null)} label="Fill the feeder">
@@ -226,7 +238,7 @@ function dedupe<T extends { speciesId: string | null; id: string }>(list: T[]): 
 export function YouTab() {
   const nav = useNav();
   const st = useGame((s) => s);
-  useEffect(() => { music('explore'); refreshChallenges(new Date()); }, []);
+  useEffect(() => { gameMusic('explore'); refreshChallenges(new Date()); }, []);
   const rank = rankFor(st.xp);
   const streak = liveStreak(st.streak, dayKey(new Date()));
   const earned = Object.keys(st.badges).length;
@@ -452,3 +464,9 @@ export function YearScreen() {
 }
 
 export { setState, useMemo };
+
+function HomeThumb({ id }: { id: string }) {
+  const c = useRef<HTMLCanvasElement>(null);
+  useEffect(() => { if (c.current) paintHomeThumb(c.current, id, 200); }, [id]);
+  return <canvas ref={c} className="home-thumb" aria-hidden />;
+}

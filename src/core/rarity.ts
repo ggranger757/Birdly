@@ -103,7 +103,7 @@ export const TYPE_LABEL: Record<BirdType, string> = {
 };
 export const GROUP_PLURAL: Partial<Record<BirdType, string>> = {
   Song: 'Songbirds', Clever: 'Crows & jays', Raptor: 'Birds of prey', Night: 'Owls', Water: 'Ducks & waterbirds', Shore: 'Herons & waders',
-  Sea: 'Gulls & seabirds', Wood: 'Woodpeckers', Jewel: 'Hummingbirds', Ground: 'Ground birds', Tropic: 'Parrots', Dive: 'Kingfishers',
+  Sea: 'Gulls & seabirds', Wood: 'Woodpeckers', Jewel: 'Hummingbirds', Ground: 'Ground birds', Tropic: 'Parrots', Dive: 'Kingfishers & hoopoes',
 };
 export const GROUP_TYPES: BirdType[] = ['Song', 'Clever', 'Raptor', 'Night', 'Water', 'Shore', 'Sea', 'Wood', 'Jewel', 'Ground', 'Tropic', 'Dive'];
 export const PLACE_TYPES: BirdType[] = ['City', 'Forest', 'Wetland'];

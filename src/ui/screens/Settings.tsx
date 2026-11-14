@@ -67,7 +67,8 @@ export function Settings() {
 
         <div className="label mb8">Play</div>
         <div className="panel">
-          <Toggle label="Music" on={st.settings.music} set={(v) => { set({ music: v }); const t = currentTheme(); music(null); if (v) music((t as 'explore') ?? 'explore'); }} hint="Main theme and chiptune music. Always pauses when you leave the app." />
+          <Toggle label="Title music" on={st.settings.music} set={(v) => { set({ music: v }); if (!v) music(null); }} hint="The main theme on the title screen. It never plays while you are in the game unless you turn on the option below." />
+          <Toggle label="Music during play" on={st.settings.gameMusic} set={(v) => { set({ gameMusic: v }); music(v ? 'explore' : null); }} hint="Off by default. Sound effects and jingles still play." />
           <Toggle label="Sound effects" on={st.settings.sound} set={(v) => set({ sound: v })} hint="Every sound has a visual equivalent." />
           <Toggle label="Haptics" on={st.settings.haptics} set={(v) => set({ haptics: v })} />
           <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />

@@ -38,7 +38,7 @@ export interface Sighting {
 export interface Settings {
   sound: boolean; haptics: boolean; grid: boolean;
   motion: 'system' | 'reduced' | 'full';
-  dyslexiaFont: boolean; refPhotos: boolean; music: boolean;
+  dyslexiaFont: boolean; refPhotos: boolean; music: boolean; gameMusic: boolean;
 }
 
 export interface ChallengeSlot { id: string; param?: string | number; claimed: boolean }
@@ -56,7 +56,7 @@ export interface GameState {
   badges: Record<string, string>;       // id → earned ISO
   challenges: { day: string; daily: ChallengeSlot[]; week: string; weekly: ChallengeSlot | null; seasonal: ChallengeSlot | null; history: Record<string, string[]> };
   events: { sitSpots: string[]; shares: string[] };
-  diorama: { biome: Habitat; birds: string[]; decor: Record<string, string> }; // `decor` is legacy (feature removed); kept so old saves load
+  diorama: { biome: Habitat; home?: string /* chosen Bird Home scene id; unset = follows time of day */; birds: string[]; decor: Record<string, string> }; // `decor` is legacy (feature removed); kept so old saves load
   ownedDecor: string[];                // legacy
   settings: Settings;
   sessions: number;

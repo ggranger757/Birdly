@@ -10,9 +10,9 @@ import { liveStreak, dayKey, rankFor } from '../../core/xp';
 import { fetchWeather, Weather } from '../../app/net';
 import { renderFrames, defaultParts } from '../../core/pixel/sprite';
 import { frameImage, Icon, RarityTag, Sheet } from '../components';
-import { FeatherChip } from '../kit';
+import { FeatherChip, Segmented } from '../kit';
 import { BirdThumb, Types, dexNo } from '../game';
-import { sfx, music } from '../../app/audio';
+import { sfx, gameMusic } from '../../app/audio';
 import { RegionPicker } from './RegionPicker';
 import type { Species } from '../../data/types';
 import 'leaflet/dist/leaflet.css';
@@ -67,6 +67,7 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
   const layer = useRef<Leaflet.LayerGroup | null>(null);
   const me = useRef<Leaflet.Marker | null>(null);
   const [pos, setPos] = useState<[number, number] | null>(null);
+  const [tilesFailed, setTilesFailed] = useState(false);
   const [state, setStateMsg] = useState<'idle' | 'loading' | 'ok' | 'offline' | 'error'>('idle');
   const [info, setInfo] = useState<{ n: number; hidden: number }>({ n: 0, hidden: 0 });
   const region = getRegion(regionCode);
@@ -77,9 +78,22 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
       if (!live || !box.current) return;
       const Lf = (mod as any).default ?? mod; L.current = Lf;
       const m = Lf.map(box.current, { zoomControl: false, attributionControl: true }).setView([region.lat, region.lng], 7);
-      Lf.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd', maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a> · sightings: <a href="https://www.inaturalist.org">iNaturalist</a>',
-      }).addTo(m);
+      // Free, keyless OpenStreetMap tiles (CARTO now requires an API key). If they fail, switch to a mirror.
+      const ATTR = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · sightings: <a href="https://www.inaturalist.org">iNaturalist</a>';
+      const SOURCES = ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png'];
+      let src = 0, errors = 0;
+      const tiles = Lf.tileLayer(SOURCES[0], { maxZoom: 19, subdomains: 'abc', attribution: ATTR, className: 'osm-tiles' }).addTo(m);
+      tiles.on('tileerror', () => {
+        errors++;
+        if (errors >= 6 && src < SOURCES.length - 1) { src++; errors = 0; tiles.setUrl(SOURCES[src]); }
+        else if (errors >= 6) setTilesFailed(true);
+      });
+      tiles.on('tileload', () => setTilesFailed(false));
+      // Leaflet measures its box once; re-measure whenever the layout settles or changes (fixes a blank map on iPhone)
+      const ro = new ResizeObserver(() => m.invalidateSize());
+      ro.observe(box.current!);
+      setTimeout(() => m.invalidateSize(), 250); setTimeout(() => m.invalidateSize(), 1000);
+      (m as any)._ro = ro;
       layer.current = Lf.layerGroup().addTo(m);
       map.current = m;
       m.on('popupopen', (e: any) => {
@@ -89,7 +103,7 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
       // auto-locate if permission was already granted
       navigator.permissions?.query({ name: 'geolocation' as PermissionName }).then((p) => { if (p.state === 'granted') locate(); else load(region.lat, region.lng, 40); }).catch(() => load(region.lat, region.lng, 40));
     });
-    return () => { live = false; map.current?.remove(); map.current = null; };
+    return () => { live = false; (map.current as any)?._ro?.disconnect(); map.current?.remove(); map.current = null; };
   }, [regionCode]);
 
   const obsRef = useRef<Obs[]>([]);
@@ -151,6 +165,7 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
         {state === 'ok' && info.hidden > 0 && <span className="chip" style={{ background: 'rgba(10,12,15,.88)' }}>{info.hidden} sensitive hidden</span>}
         {state === 'offline' && <span className="chip">Offline — map needs a connection</span>}
         {state === 'error' && <span className="chip">Couldn’t load sightings</span>}
+        {tilesFailed && <span className="chip">Map images couldn’t load — check your connection</span>}
       </div>
       <button className="btn primary small map-overlay" style={{ right: 10, top: 'calc(10px + var(--safe-t))', minHeight: 36 }} onClick={locate} aria-label="Find birds near me">
         <Icon name="map" size={14} color="var(--accent-ink)" /> Near me
@@ -169,12 +184,13 @@ export function Explore() {
   const [wx, setWx] = useState<Weather | null>(null);
   const [pickRegion, setPickRegion] = useState(false);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<'latest' | 'likely'>('latest');
   const [feed, setFeed] = useState<Feed>({ status: 'idle', list: [], hidden: 0, at: 0, from: null, near: false });
   const [refreshKey, setRefreshKey] = useState(0);
   const [, tickNow] = useState(0);
   useEffect(() => { const t = setInterval(() => tickNow((x) => x + 1), 30000); return () => clearInterval(t); }, []);
   useEffect(() => { fetchWeather(region).then(setWx); refreshChallenges(new Date()); }, [st.region]);
-  useEffect(() => { music('explore'); }, []);
+  useEffect(() => { gameMusic('explore'); }, []);
 
   const entries = regionEntries(st.region);
   const caught = new Set(st.sightings.filter(counts).map((s) => s.speciesId));
@@ -197,7 +213,7 @@ export function Explore() {
         <FeatherChip />
       </div>
 
-      <div className="drawer" style={{ height: open ? '72%' : 228 }}>
+      <div className="drawer" style={{ height: open ? '72%' : 276 }}>
         <button className="grab" onClick={() => { sfx.move(); setOpen(!open); }} aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} style={{ border: 0, minHeight: 4, padding: 0 }} />
         <div className="drawer-body">
           <div className="row between" style={{ marginBottom: 8 }}>
@@ -215,12 +231,46 @@ export function Explore() {
             {feed.status === 'offline' && <>You're offline. The map will update when you're back online.</>}
             {feed.status === 'error' && <>{feed.error}. <button className="link" style={{ minHeight: 0, padding: 0 }} onClick={() => setRefreshKey((k) => k + 1)}>Retry</button></>}
           </div>
-          <div className="section-title" style={{ marginTop: 0 }}><span>Likely here now</span><button className="link" style={{ minHeight: 0, padding: 0, fontSize: 13 }} onClick={() => setOpen(!open)}>{open ? 'Less' : 'More'}</button></div>
-          {!open ? (
+          <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+            <div className="grow"><Segmented label="Show" value={view} onChange={setView} options={[
+              { id: 'latest', label: `Latest${feed.list.length ? ` · ${feed.list.length}` : ''}` },
+              { id: 'likely', label: 'Likely here' },
+            ]} /></div>
+            <button className="btn small" style={{ minHeight: 44 }} onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'All'}</button>
+          </div>
+          {view === 'latest' ? (
+            feed.list.length === 0 ? (
+              <p className="small muted" style={{ margin: '4px 0' }}>
+                {feed.status === 'ok' ? 'No public bird reports here in the last 30 days. Tap Near me, or try a busier area.' : feed.status === 'error' ? 'Live sightings are unavailable right now.' : 'Looking for the latest reports…'}
+              </p>
+            ) : !open ? (
+              <div className="bird-cards">
+                {feed.list.slice(0, 20).map((o) => (
+                  <button key={o.id} className={`bird-card ${caught.has(o.sp.id) ? 'caught' : ''}`} onClick={() => openSp(o.sp)}>
+                    {o.photo ? <img src={o.photo} alt="" loading="lazy" /> : <span className="ph" style={{ display: 'block', overflow: 'hidden' }}><BirdThumb sp={o.sp} size={84} /></span>}
+                    <span className="seen">{o.observedAt ? agoTime(o.observedAt) : ago(o.observedOn)}{feed.from ? ` · ${km(feed.from, [o.lat, o.lng]).toFixed(1)} km` : ''}</span>
+                    <span className="nm">{o.sp.common}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                {feed.list.slice(0, 40).map((o) => (
+                  <button key={o.id} className="srow" onClick={() => openSp(o.sp)}>
+                    {o.photo ? <img src={o.photo} alt="" width={52} height={52} style={{ objectFit: 'cover', border: '2px solid #000' }} /> : <BirdThumb sp={o.sp} size={52} />}
+                    <span className="grow"><span className="name">{o.sp.common}</span>{caught.has(o.sp.id) && <span className="px small" style={{ color: 'var(--accent)' }}> ✓</span>}<br />
+                      <span className="small" style={{ color: 'var(--lichen)' }}>{o.observedAt ? agoTime(o.observedAt) : ago(o.observedOn)}</span>
+                      <span className="small muted">{feed.from ? ` · ${km(feed.from, [o.lat, o.lng]).toFixed(1)} km` : ''}{o.place ? ` · ${o.place.split(',')[0]}` : ''}</span></span>
+                  </button>
+                ))}
+                <p className="small muted">Real reports from iNaturalist observers in the last 30 days, newest first. Sensitive species are never shown. <button className="link" style={{ minHeight: 0, padding: 0 }} onClick={() => setRefreshKey((k) => k + 1)}>Refresh now</button></p>
+              </>
+            )
+          ) : !open ? (
             <div className="bird-cards">
               {likely.map(({ sp, dex }) => (
                 <button key={sp.id} className={`bird-card ${caught.has(sp.id) ? 'caught' : ''}`} onClick={() => openSp(sp)}>
-                  {sp.photo ? <img src={sp.photo} alt="" loading="lazy" /> : <span className="ph" style={{ display: "block", overflow: "hidden" }}><BirdThumb sp={sp} size={84} /></span>}
+                  {sp.photo ? <img src={sp.photo} alt="" loading="lazy" /> : <span className="ph" style={{ display: 'block', overflow: 'hidden' }}><BirdThumb sp={sp} size={84} /></span>}
                   <span className="dexno">{dexNo(dex)} {caught.has(sp.id) ? <span style={{ color: 'var(--accent)' }}>✓ found</span> : ''}</span>
                   <span className="nm">{sp.common}</span>
                 </button>
@@ -237,19 +287,6 @@ export function Explore() {
                   {caught.has(sp.id) ? <span className="px small" style={{ color: 'var(--accent)' }}>✓</span> : <span className="px small muted">NEW</span>}
                 </button>
               ))}
-              {feed.list.length > 0 && (
-                <>
-                  <div className="section-title"><span>Latest sightings</span><button className="link" style={{ minHeight: 0, padding: 0, fontSize: 13 }} onClick={() => setRefreshKey((k) => k + 1)}>Refresh</button></div>
-                  {feed.list.slice(0, 10).map((o) => (
-                    <button key={o.id} className="srow" onClick={() => openSp(o.sp)}>
-                      {o.photo ? <img src={o.photo} alt="" width={44} height={44} style={{ objectFit: 'cover', border: '2px solid #000' }} /> : <BirdThumb sp={o.sp} size={44} />}
-                      <span className="grow"><span className="name">{o.sp.common}</span><br />
-                        <span className="small muted">{o.observedAt ? agoTime(o.observedAt) : ago(o.observedOn)}{feed.from ? ` · ${km(feed.from, [o.lat, o.lng]).toFixed(1)} km` : ''}{o.place ? ` · ${o.place.split(',')[0]}` : ''}</span></span>
-                    </button>
-                  ))}
-                  <p className="small muted">Real reports from iNaturalist observers. Sensitive species are never shown.</p>
-                </>
-              )}
               <p className="small muted mt16">
                 {status === 'loading' ? 'Updating the local bird list from iNaturalist…'
                   : fallback ? `Offline list: using curated birds from ${getRegion(fallback).name} until the live list loads.`

@@ -28,7 +28,7 @@ export function freshState(): GameState {
     challenges: { day: '', daily: [], week: '', weekly: null, seasonal: null, history: {} },
     events: { sitSpots: [], shares: [] },
     diorama: { biome: 'urban', birds: [], decor: {} }, ownedDecor: [],
-    settings: { sound: true, music: true, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true },
+    settings: { sound: true, music: true, gameMusic: false, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true },
     sessions: 0, lastSession: null, backupPromptAfter: null, firstCatchSeconds: null, installStartedAt: now, log: [],
     trainerName: '', partner: null, speciesDefs: {},
     items: { seeds: 0, berries: 0, worms: 0 }, feeder: { level: 60 }, petDay: null,
@@ -297,6 +297,7 @@ export function toggleHabitatBird(id: string): boolean {
   return true;
 }
 
+export function setHome(id: string | undefined) { setState((s) => ({ ...s, diorama: { ...s.diorama, home: id } })); }
 export function setBiome(b: Habitat) { setState((s) => ({ ...s, diorama: { ...s.diorama, biome: b } })); }
 
 export function speciesCount(s: GameState) { return new Set(s.sightings.filter(counts).map((x) => x.speciesId)).size; }

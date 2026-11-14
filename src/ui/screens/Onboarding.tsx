@@ -8,7 +8,7 @@ import { sfx, music } from '../../app/audio';
 import { Professor, Druid } from '../Characters';
 import { RegionPicker } from './RegionPicker';
 import { getRegion, regionLabel } from '../../data/geo';
-import { regionEntries, ensureRegion, onProviderChange, providerStatus } from '../../data/provider';
+import { regionEntries, ensureRegion, allKnownSpecies, onProviderChange, providerStatus } from '../../data/provider';
 import { typesOf } from '../../core/rarity';
 import type { Species } from '../../data/types';
 
@@ -118,18 +118,27 @@ function PartnerPick({ region, onDone }: { region: string; onDone: () => void })
   const [, force] = useState(0);
   useEffect(() => { ensureRegion(region); return onProviderChange(() => force((x) => x + 1)); }, [region]);
   const status = providerStatus(region);
+  // wait for the live regional list (up to 8s) so the choices don't swap under the player's finger
+  const [waited, setWaited] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setWaited(true), 8000); return () => clearTimeout(t); }, []);
+  const ready = (status !== 'loading' && status !== 'idle') || waited;
   const choices = useMemo(() => {
-    const top = regionEntries(region).filter((e) => !e.sp.sensitive && e.sp.archetype !== 'owl').slice(0, 40);
+    if (!ready) return [];
+    const ok = (sp: Species) => !sp.sensitive && sp.archetype !== 'owl';
+    const top = regionEntries(region).map((e) => e.sp).filter(ok).slice(0, 40);
     const out: Species[] = []; const types = new Set<string>();
-    for (const e of top) { const t = typesOf(e.sp)[0]; if (!types.has(t)) { types.add(t); out.push(e.sp); } if (out.length === 3) break; }
-    for (const e of top) { if (out.length >= 3) break; if (!out.includes(e.sp)) out.push(e.sp); }
+    for (const sp of top) { const t = typesOf(sp)[0]; if (!types.has(t)) { types.add(t); out.push(sp); } if (out.length === 3) break; }
+    for (const sp of top) { if (out.length >= 3) break; if (!out.includes(sp)) out.push(sp); }
+    // always offer three, even where data is thin
+    for (const sp of allKnownSpecies().filter(ok)) { if (out.length >= 3) break; if (!out.some((x) => x.id === sp.id)) out.push(sp); }
     return out;
-  }, [region, status]);
+  }, [region, ready]);
   const [pick, setPick] = useState<Species | null>(null);
   return (
     <div className="screen">
       <Dialog speaker="Professor Merlin" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} />
-      {status === 'loading' && <p className="small muted mt8">Looking up the birds of {regionLabel(region)}…</p>}
+      {!ready && <p className="small muted mt8">Looking up the birds of {regionLabel(region)}…</p>}
+      {!ready && <div className="col mt16" style={{ gap: 12 }}>{[0, 1, 2].map((i) => <div key={i} className="panel skeleton" style={{ margin: 0, height: 84 }} />)}</div>}
       <div className="col mt16" style={{ gap: 12 }}>
         {choices.map((sp) => (
           <button key={sp.id} className={`panel ${pick?.id === sp.id ? 'highlight' : ''}`} style={{ margin: 0, textAlign: 'left', display: 'flex', gap: 12, alignItems: 'center' }}

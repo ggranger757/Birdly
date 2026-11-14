@@ -48,7 +48,7 @@ export default defineConfig({
             options: { cacheName: 'music', rangeRequests: true, cacheableResponse: { statuses: [200] }, expiration: { maxEntries: 4 } }
           },
           {
-            urlPattern: /^https:\/\/[abcd]\.basemaps\.cartocdn\.com\//,
+            urlPattern: /^https:\/\/([abc]\.)?tile\.openstreetmap\.(org|fr)\//,
             handler: 'CacheFirst',
             options: { cacheName: 'map-tiles', cacheableResponse: { statuses: [0, 200] }, expiration: { maxEntries: 600, maxAgeSeconds: 30 * 864e2 } }
           },

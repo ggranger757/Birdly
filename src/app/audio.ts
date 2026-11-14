@@ -282,3 +282,8 @@ if (typeof document !== 'undefined') {
 }
 // read-only audio status for the debug panel and automated checks
 if (typeof window !== 'undefined') (window as any).__audioState = () => ({ songPlaying: !!songEl && !songEl.paused, context: ctx?.state ?? 'none', theme: current });
+
+/** In-game screens call this: silent unless the player turned on "Music during play". */
+export function gameMusic(name: keyof typeof T) {
+  music(getState().settings.gameMusic ? name : null);
+}

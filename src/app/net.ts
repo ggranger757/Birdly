@@ -48,27 +48,42 @@ const inflight = new Map<string, Promise<RefPhoto | null>>();
 export function refPhoto(sp: Species): Promise<RefPhoto | null> {
   if (!sp.sci) return Promise.resolve(null);
   if (inflight.has(sp.id)) return inflight.get(sp.id)!;
+  const key = `v2:${sp.id}`; // v2: older builds cached 'none' when only the default photo was unlicensed
   const p = (async () => {
     try {
-      const cached = await getRef<RefPhoto | 'none'>(sp.id);
-      if (cached === 'none') return null;
-      if (cached) return cached;
+      const cached = await getRef<RefPhoto | 'none' | { none: number }>(key);
+      if (cached && typeof cached === 'object' && 'none' in cached) { if (Date.now() - cached.none < 7 * 864e5) return null; }
+      else if (cached && cached !== 'none') return cached as RefPhoto;
     } catch { /* ignore */ }
     if (!navigator.onLine) return null;
-    try {
-      const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sp.sci)}&rank=species&per_page=5`);
-      if (!res.ok) return null;
-      const j = await res.json();
-      const results: any[] = j.results ?? [];
-      const exact = results.find((r) => r.name?.toLowerCase() === sp.sci.toLowerCase()) ?? results[0];
-      const ph = exact?.default_photo;
+    const get = async (u: string) => { const r = await fetch(u); if (!r.ok) throw new Error(String(r.status)); return r.json(); };
+    const make = (ph: any, taxonId: number): RefPhoto | null => {
       const lic = ph?.license_code as string | null;
-      if (!ph || !lic || !LICENSES[lic]) { await putRef(sp.id, 'none').catch(() => {}); return null; }
-      const out: RefPhoto = {
-        url: ph.medium_url, square: ph.square_url, attribution: ph.attribution, license: LICENSES[lic],
-        taxonUrl: `https://www.inaturalist.org/taxa/${exact.id}`,
-      };
-      await putRef(sp.id, out).catch(() => {});
+      if (!ph || !lic || !LICENSES[lic] || !ph.url) return null;
+      const base = String(ph.url);
+      return { url: ph.medium_url ?? base.replace(/square|small|thumb/, 'medium'), square: ph.square_url ?? base.replace(/medium|small|thumb/, 'square'),
+        attribution: ph.attribution ?? '', license: LICENSES[lic], taxonUrl: `https://www.inaturalist.org/taxa/${taxonId}` };
+    };
+    try {
+      // 1) the species' own photos: the default first, then the rest of its gallery
+      let id = sp.inatId;
+      if (!id) {
+        const j = await get(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sp.sci)}&rank=species&per_page=5`);
+        const results: any[] = j.results ?? [];
+        const exact = results.find((r) => r.name?.toLowerCase() === sp.sci.toLowerCase()) ?? results[0];
+        if (!exact) throw new Error('no taxon');
+        id = exact.id;
+        const d = make(exact.default_photo, id!); if (d) { await putRef(key, d).catch(() => {}); return d; }
+      }
+      const t = (await get(`https://api.inaturalist.org/v1/taxa/${id}`)).results?.[0];
+      let out = make(t?.default_photo, id!);
+      for (const tp of t?.taxon_photos ?? []) { if (out) break; out = make(tp.photo, id!); }
+      // 2) a Creative-Commons photo from a research-grade observation
+      if (!out) {
+        const o = await get(`https://api.inaturalist.org/v1/observations?taxon_id=${id}&quality_grade=research&photo_license=cc0,cc-by,cc-by-nc,cc-by-sa,cc-by-nc-sa,cc-by-nd,cc-by-nc-nd&order_by=votes&per_page=3`);
+        for (const ob of o.results ?? []) { if (out) break; for (const ph of ob.photos ?? []) { out = make(ph, id!); if (out) break; } }
+      }
+      await putRef(key, out ?? { none: Date.now() }).catch(() => {});
       return out;
     } catch { return null; }
   })();

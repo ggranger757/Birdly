@@ -83,6 +83,15 @@ export async function paintSceneThumb(canvas: HTMLCanvasElement, biome: Habitat,
   paintLayers(canvas.getContext('2d')!, imgs, s, viewW, canvas.height);
 }
 
+/** Thumbnail of one Bird Home by scene id. */
+export async function paintHomeThumb(canvas: HTMLCanvasElement, id: string, viewW: number) {
+  const s = SCENES[id]; if (!s) return;
+  const imgs = await loadScene(s);
+  const h = Math.round(viewW * 0.56);
+  canvas.width = viewW; canvas.height = Math.min(h, s.h);
+  paintLayers(canvas.getContext('2d')!, imgs, s, viewW, canvas.height);
+}
+
 // ─── perches & props ───
 export type PerchKind = 'perch' | 'ground' | 'water';
 export interface Perch { x: number; y: number; kind: PerchKind }
@@ -194,7 +203,7 @@ export interface Bird {
   home?: Perch; eatUntil?: number;
 }
 
-export interface DioramaOpts { frame?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
+export interface DioramaOpts { sceneId?: string; frame?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
 
 export class Diorama {
   private ctx: CanvasRenderingContext2D;
@@ -207,7 +216,7 @@ export class Diorama {
   birds: Bird[] = [];
   onChange?: () => void;
   constructor(private canvas: HTMLCanvasElement, biome: Habitat, private phase: DayPhase, private opts: DioramaOpts) {
-    this.scene = sceneFor(biome, phase);
+    this.scene = opts.sceneId && SCENES[opts.sceneId] ? { ...SCENES[opts.sceneId], tint: phase === 'night' && !/night|neon|tundra|nfa/.test(opts.sceneId) ? 'rgba(6,8,30,0.35)' : undefined } : sceneFor(biome, phase);
     this.W = opts.viewW;
     this.H = Math.min(opts.viewH, this.scene.h);
     canvas.width = this.W; canvas.height = this.H;

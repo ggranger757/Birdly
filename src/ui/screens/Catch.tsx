@@ -13,7 +13,7 @@ import { RGB, CLEAR, IDX, HEX } from '../../core/palette';
 import { rgbToLab, snapToPalette } from '../../core/color';
 import { Sprite, useReducedMotion } from '../components';
 import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, FxHit } from '../game';
-import { sfx, haptic, music, playClip } from '../../app/audio';
+import { sfx, haptic, gameMusic, playClip } from '../../app/audio';
 import { RANK_LINES } from '../../core/xp';
 import type { Verification } from '../../core/model';
 import { paintSceneThumb } from '../../render/diorama';
@@ -35,14 +35,14 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
 
   useEffect(() => {
     logEvent('catch_attempt', job.mode);
-    sfx.encounter(); music('encounter');
+    sfx.encounter(); gameMusic('encounter');
     const t0 = performance.now();
     analyze(job.shot.rgba).then((a) => {
       const out = { ...a, timings: { ...a.timings, wall: performance.now() - t0 } };
       (window as any).__lastPipeline = out.timings;
       setAnalysis(out);
     });
-    return () => { music(prevTheme.current as 'explore'); };
+    return () => { gameMusic(prevTheme.current as 'explore'); };
   }, []);
   useEffect(() => {
     if (!wipeDone || !analysis) return;
