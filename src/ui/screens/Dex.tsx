@@ -56,104 +56,118 @@ export function Dex() {
     if (chapSet && !chapSet.has(e.sp.id)) return false;
     if (filter === 'found' && !caught) return false;
     if (filter === 'missing' && caught) return false;
-    if (group && typesOf(e.sp)[0] !== group) return false;
-    if (place && !(e.sp.habitats.includes(place === 'City' ? 'urban' : place === 'Forest' ? 'woodland' : 'water'))) return false;
-    if (q && !(caught && `${e.sp.common} ${e.sp.sci}`.toLowerCase().includes(q.toLowerCase())) && !String(e.dex).includes(q)) return false;
+    if (q && !`${e.sp.common} ${e.sp.sci}`.toLowerCase().includes(q.toLowerCase()) && !String(e.dex).includes(q.replace('#', ''))) return false;
     return true;
   });
+  // field-guide sections: one per bird group, in field-guide order
+  const sections = groups.map((t) => ({ t, all: entries.filter((e) => typesOf(e.sp)[0] === t), list: shown.filter((e) => typesOf(e.sp)[0] === t) })).filter((x) => x.list.length);
+  const jump = (t: BirdType) => { document.getElementById(`dex-${t}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
+  void group; void setGroup; void place; void setPlace; void groupInfo; void PLACE_TYPES;
+
+  const cell = (e: (typeof entries)[number]) => {
+    const s = mine.get(e.sp.id)?.[0];
+    const seen = seenIds.has(e.sp.id);
+    if (!s) {
+      return (
+        <li key={e.sp.id}>
+          <button className={`jcell missing ${seen ? 'seen' : ''}`} onClick={() => nav.open({ name: 'species', id: e.sp.id })}
+            aria-label={`${dexNo(e.dex)} ${e.sp.common}, ${seen ? 'seen but not photographed yet' : 'not found yet'}`}>
+            <span className="dexno">{dexNo(e.dex)}</span>
+            <span className="jcell-art"><Sprite species={e.sp} mode="silhouette" scale={2} /></span>
+            <span className="cap muted">{e.sp.common}</span>
+            <span className="jcell-foot" style={{ color: 'var(--accent)' }}>{seen ? 'Seen' : ''}</span>
+          </button>
+        </li>
+      );
+    }
+    return (
+      <li key={e.sp.id}>
+        <button className={`jcell ${nav.highlight && mine.get(e.sp.id)!.some((x) => x.id === nav.highlight) ? 'fresh' : ''}`}
+          style={{ background: `linear-gradient(${HEX[s.sprite.bg]}55, var(--plum) 70%)` }}
+          onClick={() => nav.open({ name: 'species', id: e.sp.id })} aria-label={`${dexNo(e.dex)} ${e.sp.common}, found ${formatDate(s.capturedAt)}`}>
+          <span className="dexno" style={{ color: 'var(--accent)' }}>{dexNo(e.dex)} ✓</span>
+          <span className="jcell-art"><Sprite species={e.sp} parts={s.sprite.parts} scale={2} mode={nav.highlight === s.id ? 'idle' : 'static'} /></span>
+          <span className="cap">{e.sp.common}</span>
+          <span className="jcell-foot"><HpBar hp={hpNow(s)} compact /></span>
+        </button>
+      </li>
+    );
+  };
 
   return (
-    <div className="screen with-tabs">
-      <PageHeader title="BirdDex" sub={`${region.flag ?? ''} ${region.name} · ${current ? `${current.name}: ${chapterProgress(current, found)}/${current.ids.length}` : `${have} discovered`}`} right={<FeatherChip />} />
-      <div className="label mb8">Chapters</div>
+    <div className="screen with-tabs dex">
+      <PageHeader title="BirdDex" sub={`${region.flag ?? ''} ${region.name} · ${have} of ${entries.length} found · Bird list ${mine.size}`} right={<FeatherChip />} />
+
+      {/* 1. goals */}
+      <div className="section-title"><span>Your goals</span>{chap && <button className="link" style={{ minHeight: 0 }} onClick={() => setChap(null)}>Show all birds</button>}</div>
       <div className="hscroll chapters" role="list" aria-label="BirdDex chapters">
         {chapters.map((c) => {
           const n = chapterProgress(c, found), done = n >= c.ids.length, claimed = !!st.chapters?.[c.id];
           return (
             <div key={c.id} role="listitem" className={`chapter ${chap === c.id ? 'on' : ''} ${done ? 'done' : ''}`}>
-              <button className="chapter-main" onClick={() => setChap(chap === c.id ? null : c.id)} aria-pressed={chap === c.id} aria-label={`${c.name}: ${n} of ${c.ids.length}. ${chap === c.id ? 'Showing only this chapter' : 'Show this chapter'}`}>
+              <div className="chapter-card">
+              <button className="chapter-main" onClick={() => setChap(chap === c.id ? null : c.id)} aria-pressed={chap === c.id} aria-label={`${c.name}: ${n} of ${c.ids.length}. ${chap === c.id ? 'Showing only this goal' : 'Show only these birds'}`}>
                 <span className="name small">{c.name}</span>
                 <span className="small muted chapter-blurb">{c.blurb}</span>
                 <Meter value={n} max={c.ids.length} tone="sun" label={`${c.name} progress`} />
-                <span className="row between small"><span className="num">{n}/{c.ids.length}</span><span className="muted">{claimed ? '✓ Claimed' : `+${c.reward} Feathers`}</span></span>
+                <span className="row between small"><span className="num">{n}/{c.ids.length}</span><span className="muted">{claimed ? '✓ Claimed' : `+${c.reward}`}</span></span>
               </button>
-              {done && !claimed && <button className="btn small primary block" onClick={() => { if (claimChapter(c.id, c.reward)) { playClip('levelUp'); nav.toast(`${c.name} complete! +${c.reward} Feathers`); } }}>Claim reward</button>}
+              {done && !claimed && <button className="btn small primary block" onClick={() => { if (claimChapter(c.id, c.reward)) { playClip('levelUp'); nav.toast(`${c.name} complete! +${c.reward} Feathers`); } }}>Claim +{c.reward}</button>}
+              </div>
             </div>
           );
         })}
       </div>
-      {chap && <button className="link" onClick={() => setChap(null)}>Show the whole BirdDex ({have}/{entries.length})</button>}
-      <div className="row between small mt8 mb8"><span className="muted">Whole region: {have} of {entries.length}</span><span>Life list <b className="num">{mine.size}</b></span></div>
-      {providerStatus(st.region) === 'loading' && <div className="small muted mb8">Updating the list for {region.name}…</div>}
-
-      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your birds or a dex number" aria-label="Search BirdDex"
-        style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: 'var(--well)', border: '2px solid var(--smoke)', marginBottom: 8 }} />
-      <Segmented label="Show" value={filter} onChange={setFilter} options={[
-        { id: 'all', label: `All ${entries.length}` }, { id: 'found', label: `Found ${have}` }, { id: 'missing', label: `Missing ${entries.length - have}` },
-      ]} />
-      <div className="row" style={{ gap: 8 }}>
-        <label className="grow"><span className="sr-only">Bird group</span>
-          <select className="filter" style={{ width: '100%' }} value={group} onChange={(e) => setGroup(e.target.value as BirdType | '')}>
-            <option value="">All bird groups</option>
-            {groups.map((t) => { const g = groupInfo(t); return <option key={t} value={t}>{GROUP_PLURAL[t]} · {g.n}{g.example ? ` (e.g. ${g.example})` : ''}</option>; })}
-          </select>
-        </label>
-        <label className="grow"><span className="sr-only">Where they live</span>
-          <select className="filter" style={{ width: '100%' }} value={place} onChange={(e) => setPlace(e.target.value as BirdType | '')}>
-            <option value="">Anywhere</option>
-            {PLACE_TYPES.map((t) => <option key={t} value={t}>{t === 'City' ? 'City & gardens' : t === 'Forest' ? 'Parks & woods' : 'Water & shore'}</option>)}
-          </select>
-        </label>
-      </div>
-      {(group || place) && <button className="link" onClick={() => { setGroup(''); setPlace(''); }}>Clear filters</button>}
 
       {pending.length > 0 && (
-        <section className="panel dashed mt8" aria-label="Unidentified discoveries">
+        <section className="panel dashed mt8" aria-label="Birds waiting for a name">
           <div className="label mb8">Waiting for a name · {pending.length}</div>
           <div className="hscroll">
             {pending.map((s) => (
-              <button key={s.id} className="jcell" style={{ width: 80, flex: 'none' }} onClick={() => nav.open({ name: 'species', id: s.speciesId ?? '_unknown', sightingId: s.id })}
+              <button key={s.id} className="jcell" style={{ width: 92, flex: 'none' }} onClick={() => nav.open({ name: 'species', id: s.speciesId ?? '_unknown', sightingId: s.id })}
                 aria-label={`${s.speciesId ? speciesOf(s).common : 'Unidentified bird'}, ${VERIFY_META[s.verification].label}, ${formatDate(s.capturedAt)}`}>
-                <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={2} mode="static" />
-                <span className="cap">{s.speciesId ? speciesOf(s).common : '???'}</span>
+                <span className="dexno">New</span>
+                <span className="jcell-art"><Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={2} mode="static" /></span>
+                <span className="cap">{s.speciesId ? speciesOf(s).common : 'Unknown'}</span>
+                <span className="jcell-foot small" style={{ color: 'var(--accent)' }}>Name it</span>
               </button>
             ))}
           </div>
         </section>
       )}
 
-      {st.sightings.length === 0 && <p className="small muted">Your BirdDex is empty. Photograph a real bird to discover entry #001.</p>}
-      {shown.length === 0 ? <p className="small muted mt16">Nothing matches. Loosen a filter?</p> : (
-        <ul className="jgrid mt8" aria-label={`${region.name} BirdDex`} style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          {shown.map((e) => {
-            const s = mine.get(e.sp.id)?.[0];
-            if (!s) {
-              return (
-                <li key={e.sp.id}>
-                  <button className={`jcell missing ${seenIds.has(e.sp.id) ? 'seen' : ''}`} onClick={() => nav.open({ name: 'species', id: e.sp.id })} aria-label={seenIds.has(e.sp.id) ? `${dexNo(e.dex)} ${e.sp.common}, seen but not photographed yet` : `${dexNo(e.dex)}, not discovered yet`}>
-                    <span className="dexno" style={{ alignSelf: 'flex-start' }}>{dexNo(e.dex)}</span>
-                    <Sprite species={e.sp} mode="silhouette" scale={2} />
-                    <span className="cap muted">{seenIds.has(e.sp.id) ? `Seen: ${e.sp.common}` : '???'}</span>
-                  </button>
-                </li>
-              );
-            }
-            return (
-              <li key={e.sp.id}>
-                <button className={`jcell ${nav.highlight && mine.get(e.sp.id)!.some((x) => x.id === nav.highlight) ? 'fresh' : ''}`}
-                  style={{ background: `linear-gradient(${HEX[s.sprite.bg]}55, var(--plum) 70%)` }}
-                  onClick={() => nav.open({ name: 'species', id: e.sp.id })} aria-label={`${dexNo(e.dex)} ${e.sp.common}, discovered ${formatDate(s.capturedAt)}`}>
-                  <span className="dexno" style={{ alignSelf: 'flex-start', color: 'var(--accent)' }}>{dexNo(e.dex)}</span>
-                  <Sprite species={e.sp} parts={s.sprite.parts} scale={2} mode={nav.highlight === s.id ? 'idle' : 'static'} />
-                  <span className="cap">{e.sp.common}</span>
-                  <span style={{ width: '80%', marginTop: 2 }}><HpBar hp={hpNow(s)} compact /></span>
-                </button>
-              </li>
-            );
+      {/* 2. find a bird */}
+      <div className="dex-tools">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Look up a bird by name or number" aria-label="Look up a bird"
+          style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: 'var(--well)', border: '2px solid var(--smoke)' }} />
+        <Segmented label="Show" value={filter} onChange={setFilter} options={[
+          { id: 'all', label: `All ${entries.length}` }, { id: 'found', label: `Found ${have}` }, { id: 'missing', label: `To find ${entries.length - have}` },
+        ]} />
+      </div>
+      {/* 3. field-guide index (stays on screen while you scroll) */}
+      <nav className="dex-index hscroll" aria-label="Jump to a bird group">
+          {sections.map(({ t, all }) => {
+            const got = all.filter((e) => mine.has(e.sp.id)).length;
+            return <button key={t} className="filter" onClick={() => jump(t)}>{GROUP_PLURAL[t]} <span className="muted">{got}/{all.length}</span></button>;
           })}
-        </ul>
-      )}
-      {outside.length > 0 && <p className="small muted mt16">+ {outside.length} birds discovered in other regions (see your life list on the Trainer tab).</p>}
+      </nav>
+      {providerStatus(st.region) === 'loading' && <div className="small muted mb8">Updating the list for {region.name}…</div>}
+      {st.sightings.length === 0 && <p className="small muted">Nothing found yet. Photograph a real bird and it appears here in colour.</p>}
+
+      {/* 4. the guide itself */}
+      {sections.length === 0 ? <p className="small muted mt16">No birds match. Try another name, or switch to All.</p> : sections.map(({ t, all, list }) => {
+        const got = all.filter((e) => mine.has(e.sp.id)).length;
+        return (
+          <section key={t} id={`dex-${t}`} className="dex-section" aria-label={`${GROUP_PLURAL[t]}: ${got} of ${all.length} found`}>
+            <header className="dex-head">
+              <span className="dex-head-name">{GROUP_PLURAL[t]}</span>
+              <span className="num small">{got}/{all.length}</span>
+            </header>
+            <ul className="jgrid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>{list.map(cell)}</ul>
+          </section>
+        );
+      })}
+      {outside.length > 0 && <p className="small muted mt16">+ {outside.length} birds found in other regions (see your Bird list on the Trainer tab).</p>}
       <p className="small muted mt16">Local list: species with research-grade iNaturalist records in {region.name}.</p>
     </div>
   );

@@ -514,3 +514,46 @@ section[aria-label], [data-tour], .jgrid { scroll-margin-top: 76px; }
 .season-banner { margin: 0 0 8px; padding: 8px 10px; background: var(--slate); border: 2px solid #000; font-size: 14px; line-height: 20px; }
 .advanced { margin: 8px 0 16px; }
 .advanced summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.mission-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.mission-actions .btn { min-height: 40px; width: 100%; }
+/* BirdDex field guide */
+.dex .chapters { align-items: stretch; }
+.dex .chapter-main { flex: 1; }
+.chapter-hint { display: flex; align-items: center; justify-content: center; min-height: 44px; text-align: center; }
+.dex-tools { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 8px 0 4px; margin: 4px 0 6px; display: flex; flex-direction: column; gap: 8px; }
+.dex-tools .seg { margin: 0; }
+.dex-index { gap: 6px; }
+.dex-index .filter { flex: none; white-space: nowrap; }
+.dex-section { scroll-margin-top: 170px; margin-bottom: 14px; }
+.dex-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--smoke); padding: 4px 0; margin-bottom: 8px; }
+.dex-head-name { font-family: var(--px); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+/* every BirdDex card is the same size: number / art / name (2 lines) / footer */
+.jgrid > li { display: flex; }
+.jcell { display: grid !important; grid-template-rows: 14px 1fr 28px 14px; justify-items: center; align-items: center; height: 142px; aspect-ratio: auto !important; width: 100%; padding: 6px 4px !important; gap: 2px; }
+.jcell .dexno { justify-self: start; }
+.jcell-art { display: flex; align-items: center; justify-content: center; }
+.jcell .cap { margin: 0; align-self: center; }
+.jcell-foot { width: 85%; font-size: 10px; text-align: center; font-family: var(--px); text-transform: uppercase; }
+/* equal-height rows */
+.pantry { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: stretch; }
+.pantry-tile { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 4px; padding: 8px 6px; background: var(--well); border: 2px solid var(--slate); text-align: center; }
+.pantry-name { min-height: 34px; display: flex; align-items: center; line-height: 17px; }
+.btn-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn-pair .btn { width: 100%; white-space: nowrap; }
+.lens-row { padding: 8px 10px; }
+.lens-row .grow { min-width: 0; }
+.srow > .btn, .srow > a.btn { flex: none; min-width: 76px; }
+.bird-cards { align-items: stretch; }
+.bird-card .nm { min-height: 34px; }
+.home-card .small { min-height: 34px; display: flex; align-items: center; }
+.theme-card .small { min-height: 34px; display: flex; align-items: center; }
+.dex-tools { position: static; padding: 4px 0; margin: 4px 0 4px; }
+.dex-index { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 8px 0; margin: 0 0 6px; border-bottom: 2px solid var(--slate); }
+.dex-section { scroll-margin-top: 64px; }
+.chapter-card { flex: 1; display: flex; flex-direction: column; background: var(--slate); border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+.chapter-card .chapter-main { border: 0; box-shadow: none; background: transparent; }
+.chapter.on .chapter-card { outline: 3px solid var(--accent); outline-offset: -3px; }
+.chapter.on .chapter-main { outline: none; }
+.chapter.done .chapter-card { border-color: var(--accent); }
+.chapter-card .btn { margin: 0 8px 8px; width: auto; }
+.dex-index { top: calc(-12px - var(--safe-t)); margin-left: -16px; margin-right: -16px; padding: calc(10px + var(--safe-t)) 16px 8px; }

@@ -396,6 +396,13 @@ export function setMission(m: { speciesId: string; name: string; lat: number; ln
   if (m) logEvent('mission_start', m.speciesId);
 }
 
+/** Say "not now" to an offered mission; that species isn't offered again today. */
+export function skipMission(speciesId: string) {
+  const day = dayKey(new Date());
+  setState((s) => ({ ...s, missionSkips: { day, ids: [...(s.missionSkips?.day === day ? s.missionSkips.ids : []).filter((x) => typeof x === 'string'), speciesId] } }));
+  logEvent('mission_skip', speciesId);
+}
+
 /** Claim a finished BirdDex chapter's Feather reward (once). */
 export function claimChapter(id: string, reward: number): boolean {
   if (state.chapters?.[id]) return false;

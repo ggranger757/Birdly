@@ -1,3 +1,4 @@
+import { FoodIcon } from '../FoodIcon';
 // Merlin's Shop: food and Snap Lenses, reachable from the Feather counter on every screen.
 import { useState } from 'react';
 import { useNav } from '../nav';
@@ -26,7 +27,7 @@ export function Shop() {
           </div>
           {(Object.keys(FOODS) as Food[]).map((f) => (
             <div key={f} className="srow">
-              <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
+              <FoodIcon food={f} size={40} />
               <span className="grow"><span className="name">{FOODS[f].name}</span> <span className="small muted">· have {st.items[f]}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
               <button className="btn small primary" disabled={st.feathers < FOODS[f].price} onClick={() => { if (buyFood(f)) { playClip('buy'); setShopCast((k) => k + 1); setShopLine(SHOP_THANKS[(shopCast + 1) % SHOP_THANKS.length]); nav.toast(`Bought ${FOODS[f].name}`); } else { sfx.error(); setShopLine('Not enough Feathers, friend. Go and find some birds!'); } }}>
                 {FOODS[f].price} <Icon name="feather" size={10} color="var(--accent-ink)" />

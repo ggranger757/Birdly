@@ -19,7 +19,7 @@ One line per meaningful choice, with the reason.
 - **Mobile-only layout.** The app is a 480 px column; desktop shows a note to open it on a phone.
 - **Sun times from region centroid (NOAA approx.) placed relative to solar noon.** Fixes sunsets that wrap past UTC midnight; tested across longitudes.
 - **No decorations (user request).** Feathers are spent on feeder food only; extra Aviary scenes open at 10 species.
-- **One job per tab (user request).** Explore = find birds (full-screen map + pull-up drawer), BirdDex = collection, Snap = camera, Aviary = care (Birds · Feeder · Decor), Trainer = progress (Quests · Badges · Life list). Quests live only in Trainer; alerts surface where action is needed.
+- **One job per tab (user request).** Explore = find birds (full-screen map + pull-up drawer), BirdDex = collection, Snap = camera, Aviary = care (Birds · Feeder), Trainer = progress (Quests · Badges · Lenses · Bird list). Quests live only in Trainer; alerts surface where action is needed.
 - **Discovery language (user request).** Birds are found and discovered, never caught: "Discovered!", the Snap Lens records a bird's likeness while the real bird flies on.
 - **Owner-supplied sound clips** for purchases, new BirdDex entries, level-ups/badges and the Snap Lens throw; long jingles duck the music.
 - **Professor Merlin (owner art) is the only guide.** Merlin (a real small falcon) leads onboarding, runs the Feed Store and the quest board. Rowan the druid was removed at the owner's request.
@@ -44,3 +44,7 @@ One line per meaningful choice, with the reason.
 - **Missions** turn the freshest nearby sighting of a bird you still need into a 3-hour goal (+25 XP, +25 Feathers), with walking directions via Google Maps.
 - **Pets you can touch; hunger that forgives.** Tapping a bird makes it hop and chirp and shows its HP and mood; each bird gives 3 Feathers once a day. After 20+ hours away, Merlin feeds weak Aviary birds back to 50 HP and says so.
 - **Settings diet.** Grid, reference photos, live-data check, sprite lab and diagnostics live under Advanced. Diagnostics shows a local player-journey summary (no data leaves the phone).
+- **BirdDex is a field guide.** Goals (chapters) → look-up search → All / Found / To find → a sticky group index → one section per bird group with a found count. Unfound birds show their name (a guide you can look things up in), as a silhouette. "Life list" is now "Bird list".
+- **Equal heights on every row.** BirdDex cards are a fixed 4-row grid (number / art / name / footer); chapter cards, pantry tiles, button pairs, Explore cards, Bird Home and theme cards stretch to the tallest item in their row.
+- **Pixel food icons** replace emoji so Seed Mix, Berry Mash and Mealworm Tub match the art style on every phone.
+- **Missions can be declined.** "Not now" skips that species for the rest of the day and offers the next one.

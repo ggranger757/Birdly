@@ -76,6 +76,7 @@ export interface GameState {
   tipsSeen?: string[];
   petGifts?: Record<string, string>; // bird id → day it last brought a gift
   lastSeenAt?: string;               // last time the app was open (for welcome-back care)
+  missionSkips?: { day: string; ids: string[] }; // species skipped today // sightings the player said 'not now' to today
   mission?: { speciesId: string; name: string; lat: number; lng: number; until: string } | null; // go-find-it mission from a live sighting    // one-time Merlin tips already dismissed
   chapters?: Record<string, string>; // claimed BirdDex chapter rewards (id → ISO date) // Merlin's guided tour finished or skipped // owned Snap Lenses and the one in use
   feeder: { level: number };       // food points in the Aviary feeder

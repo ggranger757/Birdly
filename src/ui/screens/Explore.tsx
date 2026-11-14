@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Leaflet from 'leaflet';
 import { useNav } from '../nav';
-import { useGame, counts, refreshChallenges, setRegion, setMission } from '../../app/store';
+import { useGame, counts, refreshChallenges, setRegion, setMission, skipMission } from '../../app/store';
 import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs } from '../../data/provider';
 import { likelyNow } from '../../core/rarity';
@@ -323,6 +323,9 @@ const directions = (lat: number, lng: number) => `https://www.google.com/maps/di
 /** Turns the freshest nearby sighting of a bird you still need into a 3-hour mission. */
 function MissionCard({ feed, caught }: { feed: Feed; caught: Set<string | null> }) {
   const mission = useGame((s) => s.mission);
+  const skips = useGame((s) => s.missionSkips);
+  const today = new Date(); const dk = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const skipped = new Set(skips?.day === dk ? skips.ids : []);
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t); }, []);
   const live = mission && Date.parse(mission.until) > Date.now() ? mission : null;
@@ -336,14 +339,17 @@ function MissionCard({ feed, caught }: { feed: Feed; caught: Set<string | null> 
       </div>
     );
   }
-  const fresh = feed.list.filter((o) => !caught.has(o.sp.id) && !o.sp.sensitive && (!o.observedAt || Date.now() - Date.parse(o.observedAt) < 48 * 3600e3));
+  const fresh = feed.list.filter((o) => !skipped.has(o.sp.id) && !caught.has(o.sp.id) && !o.sp.sensitive && (!o.observedAt || Date.now() - Date.parse(o.observedAt) < 48 * 3600e3));
   if (!fresh.length) return null;
   const pick = feed.from ? fresh.slice().sort((a, b) => km(feed.from!, [a.lat, a.lng]) - km(feed.from!, [b.lat, b.lng]))[0] : fresh[0];
   const dist = feed.from ? ` ${km(feed.from, [pick.lat, pick.lng]).toFixed(1)} km away,` : '';
   return (
     <div className="mission">
       <div className="grow"><span className="mission-tag">Mission</span> A <b>{pick.sp.common}</b> was seen{dist} {pick.observedAt ? agoTime(pick.observedAt) : ago(pick.observedOn)}. Go find it!</div>
-      <button className="btn small primary" onClick={() => { sfx.select(); setMission({ speciesId: pick.sp.id, name: pick.sp.common, lat: pick.lat, lng: pick.lng }); }}>Accept</button>
+      <div className="mission-actions">
+        <button className="btn small primary" onClick={() => { sfx.select(); setMission({ speciesId: pick.sp.id, name: pick.sp.common, lat: pick.lat, lng: pick.lng }); }}>Accept</button>
+        <button className="btn small ghost" onClick={() => { sfx.back(); skipMission(pick.sp.id); }} aria-label={`Not now: skip the ${pick.sp.common} mission`}>Not now</button>
+      </div>
     </div>
   );
 }

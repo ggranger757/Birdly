@@ -1,3 +1,4 @@
+import { FoodIcon } from '../FoodIcon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, petBird, fillFeeder, tickFeeder } from '../../app/store';
@@ -160,17 +161,18 @@ export function HabitatTab() {
             </p>
           </div>
           <div className="section-title"><span>Pantry</span><span>{bags} bag{bags === 1 ? '' : 's'}</span></div>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="pantry">
             {(Object.keys(FOODS) as Food[]).map((f) => (
-              <div key={f} className="grow" style={{ textAlign: 'center', background: 'var(--well)', border: '2px solid var(--slate)', padding: 6 }}>
-                <div style={{ fontSize: 22 }} aria-hidden>{FOODS[f].icon}</div>
-                <div className="small">{FOODS[f].name}</div><div className="num" style={{ color: 'var(--accent)' }}>×{st.items[f]}</div>
+              <div key={f} className="pantry-tile">
+                <FoodIcon food={f} size={40} />
+                <div className="small pantry-name">{FOODS[f].name}</div>
+                <div className="num" style={{ color: 'var(--accent)' }}>×{st.items[f]}</div>
               </div>
             ))}
           </div>
-          <div className="row mt16">
-            <button className="btn primary grow" onClick={() => setSheet('fill')} disabled={st.feeder.level >= FEEDER_CAP || bags === 0}>Fill feeder</button>
-            <button className="btn grow" onClick={() => nav.open({ name: 'shop' })}>Shop: food &amp; lenses</button>
+          <div className="btn-pair mt16">
+            <button className="btn primary" onClick={() => setSheet('fill')} disabled={st.feeder.level >= FEEDER_CAP || bags === 0}>Fill feeder</button>
+            <button className="btn" onClick={() => nav.open({ name: 'shop' })}>Shop</button>
           </div>
           <p className="small muted">Buy food with Feathers. Earn Feathers by photographing real birds: +20 for a new species, +12 for a repeat.</p>
         </section>
@@ -206,7 +208,7 @@ export function HabitatTab() {
           {(Object.keys(FOODS) as Food[]).map((f) => (
             <button key={f} className="srow" disabled={st.items[f] <= 0 || st.feeder.level >= FEEDER_CAP} style={{ opacity: st.items[f] <= 0 ? 0.45 : 1 }}
               onClick={() => { const n = fillFeeder(f); if (n) { sfx.page(); haptic(12); nav.toast(`Poured ${FOODS[f].name} into the feeder (+${n})`); setTimeout(runFeeder, 600); } }}>
-              <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
+              <FoodIcon food={f} size={40} />
               <span className="grow"><span className="name">{FOODS[f].name}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
               <span className="num">×{st.items[f]}</span>
             </button>
@@ -244,7 +246,7 @@ function dedupe<T extends { speciesId: string | null; id: string }>(list: T[]): 
   return list.filter((s) => { const k = String(s.speciesId); if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
-// ─── YOU: rank, life list, badges, challenges, settings ───
+// ─── YOU: rank, bird list, badges, challenges, settings ───
 export function YouTab() {
   const nav = useNav();
   const st = useGame((s) => s);
@@ -294,7 +296,7 @@ export function YouTab() {
         { id: 'quests', label: 'Quests', badge: claimable || undefined },
         { id: 'badges', label: `Badges` },
         { id: 'lenses', label: 'Lenses' },
-        { id: 'life', label: 'Life list' },
+        { id: 'life', label: 'Bird list' },
       ]} />
 
       {section === 'quests' && (
@@ -363,8 +365,8 @@ export function YouTab() {
       )}
 
       {section === 'life' && (
-        <section aria-label="Life list">
-          {life.length === 0 && <p className="small muted">Your life list starts with your first identified discovery.</p>}
+        <section aria-label="Bird list">
+          {life.length === 0 && <p className="small muted">Your Bird list starts with the first bird you identify.</p>}
           {life.map((s) => (
             <button key={s.id} className="srow" onClick={() => nav.open({ name: 'species', id: s.speciesId! })}>
               <BirdThumb sp={speciesOf(s)} size={40} />
