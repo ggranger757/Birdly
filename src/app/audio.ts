@@ -85,6 +85,7 @@ export const sfx = {
   page: () => noise(0, 0.12, 0.06, 3000),
   sparkle: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.05, 0.1, 'square', 0.045)),
   pixel: () => tone(220 + Math.random() * 40, 0, 0.02, 'square', 0.015),
+  chirp: () => { const b = 2400 + Math.random() * 600; tone(b, 0, 0.05, 'square', 0.04, 'sfx', b * 1.25); tone(b * 1.1, 0.08, 0.06, 'square', 0.035, 'sfx', b * 0.9); },
   error: () => { tone(330, 0, 0.1, 'square', 0.05); tone(247, 0.1, 0.16, 'square', 0.05); },
   fanfare: () => sfx.levelUp(),
 };

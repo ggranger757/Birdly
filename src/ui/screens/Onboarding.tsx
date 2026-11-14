@@ -114,12 +114,7 @@ function Outro({ r, region, onFinish }: { r: ReturnType<typeof getRegion>; regio
       </div>
       <Dialog speaker="Professor Merlin" lines={[
         `${r.flag ?? ''} ${regionLabel(region)}. Splendid birding country!`,
-        'I run the shop (bird food and Snap Lenses) and hand out quests. Visit me whenever your feeder runs low.',
-        'Here is your Snap Lens. Point your camera at a real bird and press the shutter.',
-        'Every photo gets a SNAP POWER score out of 100. Sharp, close, well-lit photos score higher and earn more XP.',
-        'Then tell me which bird it is. I turn your photo into a pixel bird, coloured from YOUR shot, and you record it with your lens.',
-        'You start with the Ripple Lens. Buy fancier lenses in my shop with Feathers. Each one records birds with its own effect!',
-        'Fill your BirdDex, earn badges, and grow your Aviary. Your quest begins now!',
+        'I run the shop and hand out quests. I will pop up with a tip the first time you open each screen. Off you go!',
       ]} onDone={() => {
         setState((s) => ({ ...s, onboarded: true, diorama: { ...s.diorama, biome: s.habitat } }));
         sfx.levelUp(); onFinish();

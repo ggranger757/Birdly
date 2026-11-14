@@ -18,6 +18,8 @@ export type Route =
   | { name: 'viewfinder' }
   | { name: 'catch'; job: CaptureJob }
   | { name: 'sketch' }
+  | { name: 'quicklog' }
+  | { name: 'shop' }
   | { name: 'badges' }
   | { name: 'challenges' }
   | { name: 'settings' }

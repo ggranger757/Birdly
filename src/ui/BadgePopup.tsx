@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGame, shiftBadgeQueue } from '../app/store';
 import { BADGES, TIER_FEATHERS } from '../core/badges';
 import { BadgeIcon } from './game';
@@ -10,6 +10,8 @@ const TIER_COL: Record<string, string> = { bronze: '#C2622F', silver: '#B6C0C9',
 export function BadgePopup({ blocked }: { blocked: boolean }) {
   const id = useGame((s) => s.badgeQueue[0]);
   const b = id ? BADGES.find((x) => x.id === id) : undefined;
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setCopied(false), [id]);
   useEffect(() => { if (b && !blocked) { playClip('levelUp', { duck: true }); haptic([15, 40, 15, 40, 30]); } }, [b?.id, blocked]);
   useEffect(() => { if (id && !b) shiftBadgeQueue(); }, [id]);
   if (!b || blocked) return null;
@@ -24,7 +26,13 @@ export function BadgePopup({ blocked }: { blocked: boolean }) {
           <span className="chip" style={{ background: TIER_COL[b.tier], color: '#0A0C0F', borderColor: '#000' }}>{b.tier}</span>
           <span className="chip">+{TIER_FEATHERS[b.tier]} Feathers</span>
         </div>
-        <button className="btn primary block mt16" onClick={shiftBadgeQueue}>Nice!</button>
+        <div className="row mt16" style={{ gap: 8 }}>
+          <button className="btn grow" onClick={async () => {
+            const text = `I just earned the ${b.name} badge in BirdlyQuest! ${b.desc}`;
+            try { if (navigator.share) await navigator.share({ title: 'BirdlyQuest', text }); else { await navigator.clipboard.writeText(text); setCopied(true); } } catch { /* cancelled */ }
+          }}>{copied ? 'Copied!' : 'Share'}</button>
+          <button className="btn primary grow" onClick={shiftBadgeQueue}>Nice!</button>
+        </div>
       </div>
     </div>
   );

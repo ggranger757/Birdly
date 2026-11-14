@@ -266,7 +266,7 @@ export interface Bird {
   blinkAt: number; actionAt: number;
   home?: Perch; eatUntil?: number;
   hp?: number; hpFrom?: number; hpTo?: number; hpT0?: number; hpT1?: number; // small HP bar, animates while eating
-  returnAt?: number; arc?: number; // fly-about: when to head home, and how high the flight arcs
+  returnAt?: number; arc?: number; pokeAt?: number; // fly-about: when to head home, and how high the flight arcs
 }
 
 export interface DioramaOpts { sceneId?: string; frame?: boolean; hpBars?: boolean; wander?: boolean; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
@@ -320,6 +320,10 @@ export class Diorama {
     this.onChange?.();
     return true;
   }
+  /** A tapped bird hops, faces you and flaps once. */
+  poke(key: string) { const b = this.birds.find((x) => x.key === key); if (b && b.state === 'perched' && !b.eatUntil && !b.returnAt) { b.pokeAt = performance.now(); b.flip = !b.flip; } }
+  /** Where a bird is, in canvas pixels (for labels drawn over the canvas). */
+  where(key: string) { const b = this.birds.find((x) => x.key === key); return b ? { x: b.x, y: b.y } : null; }
   /** Set a bird's HP bar without animation. */
   setHp(key: string, hp: number) { const b = this.birds.find((x) => x.key === key); if (b) b.hp = hp; }
 
@@ -425,6 +429,7 @@ export class Diorama {
 
   frameFor(b: Bird, t: number): number {
     if (b.state !== 'perched' || b.returnAt) return 8 + (Math.floor(t / 83) % 6);
+    if (b.pokeAt && t - b.pokeAt < 420) return 8 + (Math.floor((t - b.pokeAt) / 70) % 6);
     if (b.eatUntil && t < b.eatUntil) return Math.floor(t / 180) % 2 ? 6 : 0; // pecking at the feeder
     if (this.opts.reduced) return 0;
     if (t > b.blinkAt) { if (t > b.blinkAt + 170) b.blinkAt = t + 4000 + ((b.seed * 7919 + t) % 3000); else return 4; }
@@ -435,7 +440,11 @@ export class Diorama {
     return Math.floor((t + b.seed * 37) / 166) % 4;
   }
 
-  spriteBox(b: Bird) { return { x: Math.round(b.x - 16), y: Math.round(b.y - 30) }; }
+  spriteBox(b: Bird) {
+    const k = b.pokeAt ? (performance.now() - b.pokeAt) / 420 : 1;
+    const hop = k < 1 ? Math.round(Math.sin(k * Math.PI) * 7) : 0;
+    return { x: Math.round(b.x - 16), y: Math.round(b.y - 30 - hop) };
+  }
 
   /** Draw the background only (no birds) — used as the photo backdrop for palette sampling. */
   drawScene(g: CanvasRenderingContext2D, t: number) {

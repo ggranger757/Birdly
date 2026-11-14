@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
+import { useGame, getState, counts, speciesOf, speciesCount, setBiome, setHome, toggleHabitatBird, setState, claimChallenge, refreshChallenges, buyFood, buyLens, equipLens, collectAviary, petBird, fillFeeder, tickFeeder } from '../../app/store';
 import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
 import { getRegion, regionLabel } from '../../data/geo';
 import { allKnownSpecies } from '../../data/provider';
 import { gameMusic } from '../../app/audio';
 import { Types, BirdThumb, dexNo, BadgeIcon, HpBar, Capsule } from '../game';
-import { LENSES, LENS_ORDER } from '../../core/lenses';
+import { LENSES, LENS_ORDER, lensOf } from '../../core/lenses';
+import { LensList } from '../LensList';
 import { PageHeader, Segmented, Alert, FeatherChip } from '../kit';
 import { Professor } from '../Characters';
 import { Diorama, SCENES, paintHomeThumb } from '../../render/diorama';
@@ -19,7 +20,6 @@ import { Sprite, Meter, Icon, useReducedMotion, Sheet, RarityTag } from '../comp
 import { sfx, haptic, playClip } from '../../app/audio';
 
 // ─── AVIARY: your birds living in a scene, kept fed from the feeder ───
-const SHOP_THANKS = ['A fine choice. Your birds will sing for it.', 'Into the bag it goes! Fill that feeder.', 'Splendid! The birds thank you.', 'Fresh seed, straight from my larder. Enjoy!'];
 
 export function HabitatTab() {
   useEffect(() => { gameMusic('aviary'); }, []);
@@ -32,11 +32,11 @@ export function HabitatTab() {
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [sheet, setSheet] = useState<'box' | 'fill' | 'shop' | 'homes' | null>(null);
   const [section, setSection] = useState<'birds' | 'feeder'>('birds');
-  const [shopCast, setShopCast] = useState(0);
-  const [shopLine, setShopLine] = useState('Seeds, berries, mealworms! Fair prices, paid in Feathers.');
   const [sceneLabel, setSceneLabel] = useState('');
   const [gift, setGift] = useState(0);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [hello, setHello] = useState<{ key: string; text: string; gift: number; at: number } | null>(null);
+  useEffect(() => { if (!hello) return; const t = setTimeout(() => setHello(null), 2700); return () => clearTimeout(t); }, [hello]);
   const [, tick] = useState(0);
   const species = speciesCount(st);
   const lv = trainerLevel(st.xp).level;
@@ -93,9 +93,28 @@ export function HabitatTab() {
         </Alert>
       )}
       {gift > 0 && <Alert tone="good">Your healthy birds brought you <b>{gift}</b> Feathers today.</Alert>}
-      <div ref={boxRef} style={{ display: 'flex', justifyContent: 'center' }}>
-        <canvas ref={ref} className="pix" style={{ width: (dims?.w ?? 0) * 2, maxWidth: '100%', border: '2px solid #000', boxShadow: '4px 4px 0 #000' }} role="img"
-          aria-label={`Aviary with ${aviary.length} birds and a feeder ${Math.round(fill * 100)}% full`} />
+      <div ref={boxRef} data-tour="aviary" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+        <canvas ref={ref} className="pix" style={{ width: (dims?.w ?? 0) * 2, maxWidth: '100%', border: '2px solid #000', boxShadow: '4px 4px 0 #000', cursor: 'pointer' }} role="img"
+          aria-label={`Aviary with ${aviary.length} birds and a feeder ${Math.round(fill * 100)}% full. Tap a bird to say hello.`}
+          onClick={(e) => {
+            const c = ref.current!, d = dio.current; if (!d) return;
+            const r = c.getBoundingClientRect(), k = c.width / r.width;
+            const b = d.hit((e.clientX - r.left) * k, (e.clientY - r.top) * k); if (!b) return;
+            d.poke(b.key); sfx.chirp(); haptic(10);
+            const sg = b.key === 'partner' ? null : st.sightings.find((x) => x.id === b.key);
+            const gift = sg ? petBird(sg.id) : 0;
+            const hp = sg ? hpNow(sg) : null;
+            setHello({ key: b.key, text: `${b.sp.common}${hp !== null ? ` · ${hp} HP · ${MOOD_LINE[mood(hp)]}` : ' · your partner'}`, gift, at: Date.now() });
+            if (gift) { playClip('buy'); }
+          }} />
+        {hello && Date.now() - hello.at < 2600 && dio.current?.where(hello.key) && ref.current && (() => {
+          const c = ref.current!, p = dio.current!.where(hello.key)!, s = c.getBoundingClientRect().width / c.width;
+          return (
+            <div className="bird-hello" style={{ left: c.offsetLeft + p.x * s, top: c.offsetTop + (p.y - 40) * s }} role="status">
+              {hello.text}{hello.gift ? <b> · brought you {hello.gift} Feathers!</b> : null}
+            </div>
+          );
+        })()}
       </div>
       {meals.length > 0 && <div className="small mt8" role="status" style={{ color: 'var(--lichen)' }}>{meals.map((m) => `${speciesOf(st.sightings.find((x) => x.id === m.id)!).common} ate (+${m.ate} HP)`).join(' · ')}</div>}
 
@@ -151,7 +170,7 @@ export function HabitatTab() {
           </div>
           <div className="row mt16">
             <button className="btn primary grow" onClick={() => setSheet('fill')} disabled={st.feeder.level >= FEEDER_CAP || bags === 0}>Fill feeder</button>
-            <button className="btn grow" onClick={() => setSheet('shop')}>Shop: food &amp; lenses</button>
+            <button className="btn grow" onClick={() => nav.open({ name: 'shop' })}>Shop: food &amp; lenses</button>
           </div>
           <p className="small muted">Buy food with Feathers. Earn Feathers by photographing real birds: +20 for a new species, +12 for a repeat.</p>
         </section>
@@ -195,46 +214,9 @@ export function HabitatTab() {
           {(Object.keys(FOODS) as Food[]).every((f) => st.items[f] <= 0) && (
             <>
               <p className="small">Your pantry is empty. Buy food with the Feathers you earn by discovering birds.</p>
-              <button className="btn primary block" onClick={() => setSheet('shop')}>Go to the food shop</button>
+              <button className="btn primary block" onClick={() => nav.open({ name: 'shop' })}>Go to the food shop</button>
             </>
           )}
-        </Sheet>
-      )}
-      {sheet === 'shop' && (
-        <Sheet onClose={() => setSheet(null)} label="Merlin's Shop">
-          <div className="row between mb8"><h3>Merlin's Shop</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
-          <div className="npc mb8">
-            <div key={shopCast} className={shopCast ? 'npc-hop' : ''}><Professor height={96} /></div>
-            <div className="bubble"><b>Professor Merlin</b>{shopLine}</div>
-          </div>
-          {(Object.keys(FOODS) as Food[]).map((f) => (
-            <div key={f} className="srow">
-              <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
-              <span className="grow"><span className="name">{FOODS[f].name}</span> <span className="small muted">· have {st.items[f]}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
-              <button className="btn small primary" disabled={st.feathers < FOODS[f].price} onClick={() => { if (buyFood(f)) { playClip('buy'); setShopCast((k) => k + 1); setShopLine(SHOP_THANKS[(shopCast + 1) % SHOP_THANKS.length]); nav.toast(`Bought ${FOODS[f].name}`); } else { sfx.error(); setShopLine('Not enough Feathers, friend. Go and find some birds!'); } }}>
-                {FOODS[f].price} <Icon name="feather" size={10} color="var(--accent-ink)" />
-              </button>
-            </div>
-          ))}
-          <div className="section-title"><span>Snap Lenses</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>Each records birds with its own effect</span></div>
-          {LENS_ORDER.map((id) => {
-            const l = LENSES[id]; const owned = st.lenses.includes(id); const on = st.lens === id;
-            return (
-              <div key={id} className="srow">
-                <span className="lens-ico" aria-hidden><Capsule size={32} lens={id} /></span>
-                <span className="grow"><span className="name">{l.name}</span>{on && <span className="small" style={{ color: 'var(--accent)' }}> · in use</span>}<br /><span className="small muted">{l.desc}</span></span>
-                {owned ? (
-                  <button className="btn small" disabled={on} onClick={() => { equipLens(id); sfx.select(); setShopLine(`The ${l.name} is ready. Go and find a bird!`); }}>{on ? 'Using' : 'Use'}</button>
-                ) : (
-                  <button className="btn small primary" disabled={st.feathers < l.price} onClick={() => { if (buyLens(id)) { playClip('buy'); setShopCast((k) => k + 1); setShopLine(`The ${l.name}! Your next bird will be recorded in style.`); nav.toast(`Bought ${l.name}`); } }}>
-                    {l.price} <Icon name="feather" size={10} color="var(--accent-ink)" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          <p className="small muted">Earn Feathers by discovering real birds (+12, or +20 for a new species), finishing quests, earning badges, and keeping your Aviary healthy.</p>
-          <button className="btn block" onClick={() => setSheet('fill')}>Fill the feeder</button>
         </Sheet>
       )}
       {sheet === 'box' && (
@@ -280,7 +262,8 @@ export function YouTab() {
     ...(st.challenges.seasonal ? [{ slot: st.challenges.seasonal, kind: 'Seasonal' }] : []),
   ];
   const claimable = slots.filter(({ slot }) => !slot.claimed && challengeProgress(st, slot, now).done).length;
-  const [section, setSection] = useState<'quests' | 'badges' | 'life'>('quests');
+  const [section, setSection] = useState<'quests' | 'badges' | 'lenses' | 'life'>('quests');
+  useEffect(() => { const f = (e: Event) => setSection((e as CustomEvent).detail); window.addEventListener('birdly:trainer-section', f); return () => window.removeEventListener('birdly:trainer-section', f); }, []);
   const [questCast, setQuestCast] = useState(0);
   const cats = ['Firsts', 'Taxonomy', 'Place', 'Craft', 'Care', 'Time', 'Dedication'] as const;
   const tierColor = { bronze: 'var(--rust)', silver: 'var(--stone)', gold: 'var(--sun)', platinum: 'var(--ice)' };
@@ -293,12 +276,12 @@ export function YouTab() {
           <div className="grow" style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: 18 }}>{st.trainerName || 'Trainer'}</h2>
             <div className="small muted">{region.flag} {regionLabel(st.region)}</div>
-            <div className="mt8"><span className="chip sun">Lv {trainerLevel(st.xp).level}</span> <span className="px small">{rank.name}</span></div>
+            <div className="mt8"><span className="chip sun">Lv {trainerLevel(st.xp).level}</span> <span className="small muted">Title:</span> <span className="px small">{rank.name}</span></div>
             {partner && <div className="small mt8">Partner: <b>{partner.common}</b></div>}
           </div>
         </div>
-        <div className="mt16"><Meter value={rank.progress * 100} tone="sun" label="Progress to next level" /></div>
-        <div className="row between small mt8"><span className="num">{st.xp} XP</span><span className="muted">{rank.next ? `Lv ${rank.index + 2} at ${rank.next.xp}` : 'Max level'}</span></div>
+        <div className="mt16"><Meter value={trainerLevel(st.xp).progress * 100} tone="sun" label="Progress to next level" /></div>
+        <div className="row between small mt8"><span className="num">{st.xp} XP</span><span className="muted">{trainerLevel(st.xp).nextXp - st.xp} XP to Lv {trainerLevel(st.xp).level + 1}</span></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', marginTop: 12, borderTop: '2px solid #000', paddingTop: 10 }}>
           <div><div className="num" style={{ fontSize: 16 }}>{life.length}</div><div className="label" style={{ fontSize: 10 }}>Species</div></div>
           <div><div className="num" style={{ fontSize: 16 }}>{st.sightings.length}</div><div className="label" style={{ fontSize: 10 }}>Sightings</div></div>
@@ -310,6 +293,7 @@ export function YouTab() {
       <Segmented label="Trainer sections" value={section} onChange={setSection} options={[
         { id: 'quests', label: 'Quests', badge: claimable || undefined },
         { id: 'badges', label: `Badges` },
+        { id: 'lenses', label: 'Lenses' },
         { id: 'life', label: 'Life list' },
       ]} />
 
@@ -359,6 +343,22 @@ export function YouTab() {
               </div>
             </div>
           ))}
+        </section>
+      )}
+
+      {section === 'lenses' && (
+        <section aria-label="Your Snap Lenses">
+          <div className="panel" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Capsule size={48} lens={st.lens} glow />
+            <div className="grow">
+              <div className="label">In use</div>
+              <div className="name">{lensOf(st.lens).name}</div>
+              <div className="lens-power">{lensOf(st.lens).power ? `+${lensOf(st.lens).power} Snap Power` : 'No Snap Power boost'}</div>
+            </div>
+            <div className="num small">{st.lenses.length}/{LENS_ORDER.length}</div>
+          </div>
+          <p className="small muted">Snap Power is your photo score out of 100. Your lens adds a bonus to every photo you take with the camera, so you earn more XP. Each lens also records birds with its own effect.</p>
+          <LensList onBought={(id) => nav.toast(`Bought ${LENSES[id].name}`)} onEquip={(id) => nav.toast(`Using ${LENSES[id].name}`)} />
         </section>
       )}
 

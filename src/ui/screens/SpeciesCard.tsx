@@ -83,7 +83,7 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
             )}
             <div className="small">
               <div className="px">{formatDate(cur.capturedAt, { day: 'numeric', month: 'short' })} · {cur.region}</div>
-              <div className="muted">{cur.mode === 'field' ? 'Field photo' : cur.mode === 'import' ? 'Archived import' : 'Sketch'}{cur.level ? ` · Lv ${cur.level}` : ''}</div>
+              <div className="muted">{cur.mode === 'field' ? 'Field photo' : cur.mode === 'import' ? 'Archived import' : cur.mode === 'seen' ? 'Seen, no photo' : 'Sketch'}{cur.level ? ` · Lv ${cur.level}` : ''}</div>
               {cur.fieldcraft && <div className="mt8">Fieldcraft {cur.fieldcraft.total}<Meter value={cur.fieldcraft.total} tone="sun" label="Fieldcraft" /></div>}
               {cur.coaching[0] && <div className="muted mt8">“{cur.coaching[0]}”</div>}
             </div>

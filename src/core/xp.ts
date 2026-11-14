@@ -1,7 +1,7 @@
 // GAM-1 XP, GAM-2 ranks, GAM-3 streaks. Pure.
 import { RARITY_META, Rarity } from './rarity';
 
-export type CatchMode = 'field' | 'import' | 'sketch';
+export type CatchMode = 'field' | 'import' | 'sketch' | 'seen';
 
 export interface XpInput {
   newSpecies: boolean; regionFirst: boolean; fieldcraft: number; rarity: Rarity; streakDays: number; mode: CatchMode;
@@ -11,7 +11,7 @@ export function catchXp(i: XpInput): number {
   const fc = i.mode === 'field' ? (i.fieldcraft / 100) * 30 : 0;
   const base = 10 + (i.newSpecies ? 50 : 0) + (i.regionFirst ? 25 : 0) + fc;
   const streak = 1 + Math.min(0.3, i.streakDays * 0.02);
-  const modeMult = i.mode === 'import' ? 0.5 : i.mode === 'sketch' ? 0.4 : 1;
+  const modeMult = i.mode === 'import' ? 0.5 : i.mode === 'sketch' ? 0.4 : i.mode === 'seen' ? 0.25 : 1;
   return Math.round(base * RARITY_META[i.rarity].mult * streak * modeMult);
 }
 
@@ -44,6 +44,11 @@ export function trainerLevel(xp: number) {
   const lv = 1 + Math.floor(Math.sqrt(Math.max(0, xp) / 30));
   const at = (l: number) => (l - 1) * (l - 1) * 30;
   return { level: lv, progress: (xp - at(lv)) / (at(lv + 1) - at(lv)), nextXp: at(lv + 1) };
+}
+
+/** Snap Power as a letter grade players read at a glance. */
+export function snapGrade(n: number): 'S' | 'A' | 'B' | 'C' | 'D' {
+  return n >= 90 ? 'S' : n >= 75 ? 'A' : n >= 55 ? 'B' : n >= 35 ? 'C' : 'D';
 }
 
 export function dayKey(d: Date): string {

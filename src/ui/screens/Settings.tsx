@@ -70,17 +70,18 @@ export function Settings() {
           </select>
         </div>
 
-        <div className="label mb8">Live data</div>
-        <LiveCheck region={st.region} />
-
         <div className="label mb8">Play</div>
         <div className="panel">
           <Toggle label="Title music" on={st.settings.music} set={(v) => { set({ music: v }); if (!v) music(null); }} hint="The main theme on the title screen. It never plays while you are in the game unless you turn on the option below." />
           <Toggle label="Music during play" on={st.settings.gameMusic} set={(v) => { set({ gameMusic: v }); music(v ? 'explore' : null); }} hint="Off by default. Sound effects and jingles still play." />
           <Toggle label="Sound effects" on={st.settings.sound} set={(v) => set({ sound: v })} hint="Every sound has a visual equivalent." />
           <Toggle label="Haptics" on={st.settings.haptics} set={(v) => set({ haptics: v })} />
-          <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />
-          <Toggle label="Reference photos" on={st.settings.refPhotos} set={(v) => set({ refPhotos: v })} hint="Real photos of each species from iNaturalist, credited to the photographer." />
+        </div>
+
+        <div className="label mb8">Help</div>
+        <div className="panel">
+          <p className="small" style={{ marginTop: 0 }}>Professor Merlin can walk you through the app again.</p>
+          <button className="btn block" onClick={() => { setState((x) => ({ ...x, tourOn: true })); nav.closeAll(); nav.setTab('explore'); }}>Replay Merlin’s tour</button>
         </div>
 
         <div className="label mb8">Theme</div>
@@ -132,10 +133,23 @@ export function Settings() {
 
         <div className="label mb8">Credits & data</div>
         <div className="panel small">
-          <p style={{ marginTop: 0 }}>Local bird lists, map sightings and reference photos come from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> research-grade observations. Map tiles © OpenStreetMap contributors © CARTO. Countries and regions: countries-states-cities-database (ODbL). A curated set of species and facts works offline. Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (non-commercial). Reference photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors, each under its own Creative Commons licence and credited where shown. Call recordings link out to <a href="https://xeno-canto.org" target="_blank" rel="noopener">Xeno-canto</a>.</p>
+          <p style={{ marginTop: 0 }}>Local bird lists, map sightings and reference photos come from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> research-grade observations. Map tiles © OpenStreetMap contributors. Countries and regions: countries-states-cities-database (ODbL). A curated set of species and facts works offline. Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (non-commercial). Reference photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors, each under its own Creative Commons licence and credited where shown. Call recordings link out to <a href="https://xeno-canto.org" target="_blank" rel="noopener">Xeno-canto</a>.</p>
           <p>Fonts: Silkscreen, Inter, Atkinson Hyperlegible (SIL Open Font License).</p>
-          <button className="link" onClick={() => nav.open({ name: 'lab' })}>Sprite lab</button>
         </div>
+
+        <details className="advanced">
+          <summary className="label">Advanced</summary>
+          <div className="panel">
+            <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />
+            <Toggle label="Reference photos" on={st.settings.refPhotos} set={(v) => set({ refPhotos: v })} hint="Real photos of each species from iNaturalist, credited to the photographer." />
+          </div>
+          <div className="label mb8">Live data</div>
+          <LiveCheck region={st.region} />
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn small grow" onClick={() => nav.open({ name: 'lab' })}>Sprite lab</button>
+            <button className="btn small grow" onClick={() => nav.open({ name: 'debug' })}>Diagnostics</button>
+          </div>
+        </details>
 
         <button className="btn danger block" onClick={() => setConfirm(true)}>Delete everything</button>
         <p className="small muted mt16" onClick={() => setTaps((t) => t + 1)} style={{ textAlign: 'center' }}>BirdlyQuest v{__APP_VERSION__} · pipeline v{PIPELINE_VERSION}</p>
@@ -186,6 +200,24 @@ export function Debug() {
         <pre className="panel">{Object.entries(info).map(([k, v]) => `${k.padEnd(14)} ${v}`).join('\n')}</pre>
         <div className="label mb8">State</div>
         <pre className="panel">{`sightings ${st.sightings.length}\nxp ${st.xp}\nfeathers ${st.feathers}\nsessions ${st.sessions}\nfirst discovery ${st.firstCatchSeconds ?? '–'}s`}</pre>
+        <div className="label mb8">Player journey (this phone)</div>
+        <pre className="panel">{(() => {
+          const real = st.sightings.filter((x) => x.mode !== 'seen').sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
+          const t0 = Date.parse(st.installStartedAt);
+          const mins = (iso?: string) => (iso ? `${Math.round((Date.parse(iso) - t0) / 60000)} min after install` : '–');
+          const days = new Set(st.log.map((l) => l.t.slice(0, 10))).size;
+          const n = (e: string) => st.log.filter((l) => l.e === e).length;
+          return [
+            `first discovery   ${mins(real[0]?.capturedAt)}`,
+            `second discovery  ${mins(real[1]?.capturedAt)}`,
+            `discoveries       ${real.length} (+${st.sightings.length - real.length} seen-only)`,
+            `days active       ${days}`,
+            `sessions          ${st.sessions}`,
+            `missions started  ${n('mission_start')}`,
+            `chapters claimed  ${Object.keys(st.chapters ?? {}).length}`,
+            `tips dismissed    ${(st.tipsSeen ?? []).length}`,
+          ].join('\n');
+        })()}</pre>
         <div className="label mb8">Events (local only)</div>
         <pre className="panel" style={{ maxHeight: 240, overflow: 'auto' }}>{st.log.slice(-40).reverse().map((l) => `${l.t.slice(11, 19)} ${l.e} ${l.d !== undefined ? JSON.stringify(l.d) : ''}`).join('\n')}</pre>
       </div>

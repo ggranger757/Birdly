@@ -477,3 +477,40 @@ input::placeholder, textarea::placeholder { color: var(--ash); opacity: 1; }
 .reveal-arrow { position: absolute; z-index: 5; left: 112px; top: calc(140px + var(--safe-t)); color: var(--accent); font-family: var(--px); font-size: 18px; letter-spacing: 4px; text-shadow: 2px 2px 0 #000; animation: arrowslide 900ms steps(6) infinite; }
 @keyframes arrowslide { from { transform: translateX(-6px); opacity: 0.4; } to { transform: translateX(10px); opacity: 1; } }
 .lens-ico { width: 40px; display: inline-flex; justify-content: center; }
+.lens-row.on { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lens-power { display: inline-block; margin: 2px 0; font-family: var(--px); font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+.tour { position: absolute; inset: 0; z-index: 3000; }
+.tour-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+.tour-hole { position: fixed; border: 3px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,0.6), 0 0 0 6px rgba(0,0,0,0.6); pointer-events: none; transition: all 220ms steps(4); animation: tourpulse 1.2s steps(2) infinite; }
+@keyframes tourpulse { 50% { border-color: #fff; } }
+.tour-card { position: absolute; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-start; }
+.tour-merlin { margin: 0 0 -8px 8px; filter: drop-shadow(3px 3px 0 #000); }
+.tour-card .dialog { width: 100%; }
+.tour .btn.ghost { color: var(--on-hi); border-color: var(--on-hi); }
+section[aria-label], [data-tour], .jgrid { scroll-margin-top: 76px; }
+.compare-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare-row figure { margin: 0; }
+.compare-row img, .compare-ph { width: 100%; aspect-ratio: 1; object-fit: cover; border: 2px solid #000; display: grid; place-items: center; background: #ddd; font-size: 12px; }
+.compare-row figcaption { font-family: var(--px); font-size: 10px; text-transform: uppercase; margin-top: 4px; text-align: center; }
+.chapters { gap: 10px; padding-bottom: 6px; }
+.chapter { flex: none; width: 180px; display: flex; flex-direction: column; gap: 6px; }
+.chapter-main { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 8px; background: var(--slate); border: 2px solid #000; box-shadow: 3px 3px 0 #000; color: var(--text); min-height: 44px; }
+.chapter.on .chapter-main { outline: 3px solid var(--accent); outline-offset: -3px; }
+.chapter.done .chapter-main { border-color: var(--accent); }
+.chapter-blurb { min-height: 34px; line-height: 17px; }
+.jcell.missing.seen { border-style: dashed; border-color: var(--accent); }
+.merlin-tip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--hi); color: var(--on-hi); border: 3px solid #000; box-shadow: 4px 4px 0 #000; animation: fadein var(--t-trans) steps(3); }
+.merlin-tip.above-tabs { position: absolute; left: 10px; right: 10px; bottom: calc(var(--tab-h) + var(--safe-b) + 10px); z-index: 1500; }
+.merlin-tip.inline { margin: 8px 0; }
+.merlin-tip-body { flex: 1; display: flex; flex-direction: column; font-size: 14px; line-height: 19px; }
+.merlin-tip-body b { font-family: var(--px); font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.06em; }
+.merlin-tip-bird { flex: none; }
+.mission { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 0 0 8px; background: var(--slate); border: 2px solid var(--accent); box-shadow: 3px 3px 0 #000; font-size: 13px; line-height: 17px; }
+.mission.on { background: var(--plum); }
+.mission-tag { display: inline-block; background: var(--accent-fill); color: var(--accent-ink); font-family: var(--px); font-size: 10px; padding: 1px 6px; margin-right: 4px; text-transform: uppercase; border: 1px solid #000; }
+.mission a.btn { text-decoration: none; }
+.bird-hello { position: absolute; transform: translate(-50%, -100%); z-index: 5; max-width: 240px; padding: 4px 8px; background: var(--hi); color: var(--on-hi); border: 2px solid #000; box-shadow: 3px 3px 0 #000; font-size: 13px; line-height: 17px; pointer-events: none; animation: tagpop 300ms steps(3) 1; text-align: center; }
+
+.season-banner { margin: 0 0 8px; padding: 8px 10px; background: var(--slate); border: 2px solid #000; font-size: 14px; line-height: 20px; }
+.advanced { margin: 8px 0 16px; }
+.advanced summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }

@@ -5,17 +5,17 @@ import type { Analysis, FieldcraftScore } from '../../core/pixel/extract';
 import { analyze } from '../../app/photo';
 import { fileCatch, CatchResult, useGame, getState, logEvent } from '../../app/store';
 import { getRegion } from '../../data/geo';
-import { regionEntries, allKnownSpecies } from '../../data/provider';
+import { regionEntries, allKnownSpecies, taxonSummary } from '../../data/provider';
 import type { Species } from '../../data/types';
 import { likelyNow } from '../../core/rarity';
 import { renderFrames } from '../../core/pixel/sprite';
 import { RGB, CLEAR, IDX, HEX } from '../../core/palette';
 import { rgbToLab, snapToPalette } from '../../core/color';
-import { Sprite, useReducedMotion } from '../components';
+import { Sprite, useReducedMotion, useRefPhoto } from '../components';
 import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, LensFx } from '../game';
-import { lensOf } from '../../core/lenses';
+import { lensOf, boostedPower } from '../../core/lenses';
 import { sfx, haptic, gameMusic, playClip } from '../../app/audio';
-import { RANK_LINES } from '../../core/xp';
+import { RANK_LINES, snapGrade } from '../../core/xp';
 import type { Verification } from '../../core/model';
 import { paintSceneThumb } from '../../render/diorama';
 import { sunTimes, dayPhase } from '../../core/sun';
@@ -61,8 +61,9 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
   };
 
   const sc = analysis?.score;
-  const snapPower = sc?.total ?? 0;
   const lens = useGame((st) => st.lens);
+  const lensBonus = job.mode === 'field' ? lensOf(lens).power : 0;
+  const snapPower = sc ? (job.mode === 'field' ? boostedPower(sc.total, lens) : sc.total) : 0;
   return (
     <div className="overlay modal" style={{ background: '#000' }}>
       <BattleField job={job} habitat={habitat} region={region} stage={stage} result={result} analysis={analysis} snapPower={snapPower} lens={lens}
@@ -77,7 +78,7 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
         {stage === 'spotted' && sc && (
           <Dialog lines={[
             job.mode === 'sketch' ? 'You sketched a wild bird!' : 'You spotted a wild bird!',
-            ...(job.mode === 'field' ? [`Snap Power ${snapPower} out of 100! That's your photo score: sharp, close, well-lit shots score higher and earn more XP.${sc.coaching[0] ? ` Tip: ${sc.coaching[0]}` : ''}`] : job.mode === 'import' ? ['An archived photo — it counts, at half XP.'] : []),
+            ...(job.mode === 'field' ? [`Snap Power: grade ${snapGrade(snapPower)} (${snapPower} out of 100)!${lensBonus ? ` (${sc.total} for the photo +${lensBonus} from your ${lensOf(lens).name}.)` : ''} That's your photo score: sharp, close, well-lit shots score higher and earn more XP.${sc.coaching[0] ? ` Tip: ${sc.coaching[0]}` : ''}`] : job.mode === 'import' ? ['An archived photo — it counts, at half XP.'] : []),
             'What bird is it?',
           ]} onDone={() => setStage('identify')} />
         )}
@@ -104,6 +105,30 @@ export function CatchFlow({ job }: { job: CaptureJob }) {
   );
 }
 
+/** Side-by-side check: your photo next to a reference photo of the candidate, with a short description. */
+function Compare({ sp, photo, onYes, onNo, onNext, nextName }: { sp: Species; photo: string; onYes: () => void; onNo: () => void; onNext?: () => void; nextName?: string }) {
+  const ref = useRefPhoto(sp);
+  const [about, setAbout] = useState<string | null>(sp.fact ?? sp.summary ?? null);
+  useEffect(() => { setAbout(sp.fact ?? sp.summary ?? null); if (!sp.fact && !sp.summary && sp.inatId) taxonSummary(sp.inatId).then((t) => t && setAbout(t)); }, [sp.id]);
+  return (
+    <div className="menu compare" style={{ padding: 10 }} role="group" aria-label={`Compare your photo with ${sp.common}`}>
+      <div className="sub" style={{ marginBottom: 6 }}>Does your bird match?</div>
+      <div className="compare-row">
+        <figure><img src={photo} alt="Your photo" /><figcaption>Your photo</figcaption></figure>
+        <figure>{ref ? <img src={ref.url} alt={`Reference photo of a ${sp.common}`} /> : <div className="compare-ph">{ref === undefined ? 'Loading…' : 'No photo'}</div>}<figcaption>{sp.common}</figcaption></figure>
+      </div>
+      <div style={{ margin: '8px 0 4px' }}><Types sp={sp} /></div>
+      {about && <p className="sub" style={{ margin: '4px 0', maxHeight: 84, overflow: 'auto' }}>{about.split(/(?<=\.)\s/).slice(0, 2).join(' ')}</p>}
+      {ref && <p className="sub" style={{ margin: 0, fontSize: 11 }}>Photo: {ref.attribution.replace(/\(c\)/i, '©')} · {ref.license}</p>}
+      <button className="btn primary block mt8" onClick={onYes}>Yes, it’s a {sp.common}</button>
+      <div className="row mt8" style={{ gap: 8 }}>
+        <button className="btn small grow" onClick={onNo}>◀ Not this one</button>
+        {onNext && <button className="btn small grow" onClick={onNext}>Try {nextName} ▶</button>}
+      </div>
+    </div>
+  );
+}
+
 function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; search: boolean; onSearch: () => void; onBack: () => void; onPick: (id: string | null, v: Verification) => void }) {
   const regionCode = useGame((s) => s.region);
   const habitat = useGame((s) => s.habitat);
@@ -111,11 +136,18 @@ function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; 
   const shortlist = useMemo(() => likelyNow(region, job.shot.takenAt, habitat).slice(0, 5), []);
   const [q, setQ] = useState('');
   const [vagrant, setVagrant] = useState(false);
+  const [cmp, setCmp] = useState<{ sp: Species; v: Verification; list: Species[] } | null>(null);
   type Opt = { kind: 'sp'; sp: Species; dex?: number } | { kind: 'search' } | { kind: 'later' };
+  if (cmp) {
+    const i = cmp.list.findIndex((x) => x.id === cmp.sp.id);
+    const other = cmp.list.length > 1 ? cmp.list[(i + 1) % cmp.list.length] : null;
+    return <Compare sp={cmp.sp} photo={job.shot.preview} onYes={() => { sfx.select(); onPick(cmp.sp.id, cmp.v); }} onNo={() => { sfx.back(); setCmp(null); }}
+      onNext={other ? () => { sfx.move(); setCmp({ ...cmp, sp: other }); } : undefined} nextName={other?.common} />;
+  }
   if (!search) {
     const opts: Opt[] = [...shortlist.map((l) => ({ kind: 'sp' as const, sp: l.sp, dex: l.dex })), { kind: 'search' }, { kind: 'later' }];
     return (
-      <Menu label="What bird is it?" items={opts} onPick={(o) => (o.kind === 'sp' ? onPick(o.sp.id, 'verified') : o.kind === 'search' ? onSearch() : onPick(null, 'unverified'))}
+      <Menu label="What bird is it?" items={opts} onPick={(o) => (o.kind === 'sp' ? setCmp({ sp: o.sp, v: 'verified', list: shortlist.map((l) => l.sp) }) : o.kind === 'search' ? onSearch() : onPick(null, 'unverified'))}
         render={(o) => o.kind === 'sp' ? (
           <span className="row grow" style={{ gap: 10 }}><BirdThumb sp={o.sp} size={44} /><span className="grow">{o.sp.common}<br /><span className="sub"><Types sp={o.sp} /></span></span><span className="sub">{dexNo(o.dex)}</span></span>
         ) : o.kind === 'search' ? <span>Search all {region.name} birds…</span> : <span>Not sure — identify later</span>} />
@@ -131,7 +163,7 @@ function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; 
         aria-label="Search species" style={{ width: '100%', minHeight: 44, padding: '6px 10px', background: '#fff', color: '#000', border: '2px solid #000', fontSize: 16 }} />
       <div style={{ maxHeight: '30vh', overflowY: 'auto' }}>
         {res.map((s) => (
-          <button key={s.id} className="menu-item" onClick={() => { sfx.select(); onPick(s.id, vagrant ? 'vagrant' : 'self-reported'); }}>
+          <button key={s.id} className="menu-item" onClick={() => { sfx.select(); setCmp({ sp: s, v: vagrant ? 'vagrant' : 'self-reported', list: res }); }}>
             <BirdThumb sp={s} size={36} /><span className="grow">{s.common}<br /><span className="sub"><i>{s.sci}</i></span></span>
           </button>
         ))}
@@ -150,6 +182,8 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
   const s = result.sighting, sp = result.species;
   const lines = [
     s.speciesId ? `Discovered! ${sp.common.toUpperCase()} was recorded in the BirdDex${s.dex ? ` as ${dexNo(s.dex)}` : ''}.` : 'Discovered! An unidentified bird was recorded in your BirdDex. Name it later.',
+    ...(result.firstEver ? ['★ YOUR FIRST BIRD! First-bird bonus: double XP and Feathers!'] : []),
+    ...(result.missionDone ? ['★ MISSION COMPLETE! You found the bird you set out for: +25 XP and +25 Feathers!'] : []),
     ...(s.firstRecord ? ['★ NEW ENTRY! You have never found this bird before.'] : s.newPlumage ? ['A new plumage! This one looks different from your others.'] : [`You have found this species ${s.timesSeen} times.`]),
     `${sp.common} is Lv ${s.level ?? 5}. You gained ${s.xp} XP and ${s.feathers} Feathers — spend them on food for your feeder.`,
     ...(getState().diorama.birds.includes(s.id) ? [getState().sightings.length === 1 ? 'Your new bird lives in the Aviary now. Keep the feeder filled and it will stay healthy!' : `${sp.common} moved into your Aviary.`] : [`Your Aviary is full, so ${sp.common} is resting in the Bird Box.`]),
@@ -157,7 +191,7 @@ function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: (
     ...(result.badges.length === 1 ? [`You earned the ${result.badges[0].name.toUpperCase()} badge!`]
       : result.badges.length > 1 ? [`You earned ${result.badges.length} badges: ${result.badges.map((b) => b.name).join(', ')}!`] : []),
     ...(result.levelUp ? [`Trainer level up! You are now Lv ${result.levelUp.level}.${result.rankUp ? ` ${RANK_LINES[result.rankUp] ?? result.rankUp}` : ''}`] : result.rankUp ? [`Trainer level up! ${RANK_LINES[result.rankUp] ?? result.rankUp}`] : []),
-    ...(result.levelUp?.homes.length ? [`New Bird Home${result.levelUp.homes.length > 1 ? 's' : ''} unlocked: ${result.levelUp.homes.join(' and ')}! Visit your Aviary to move in.`] : []),
+    ...(result.levelUp?.homes.length ? [`New Bird Home${result.levelUp.homes.length > 1 ? 's' : ''} unlocked: ${result.levelUp.homes.length > 1 ? `${result.levelUp.homes.slice(0, -1).join(', ')} and ${result.levelUp.homes.at(-1)}` : result.levelUp.homes[0]}! Visit your Aviary to move in.`] : []),
   ];
   const played = useRef(false);
   return (
@@ -266,7 +300,7 @@ function BattleField({ job, habitat, region, stage, result, analysis, snapPower,
       <div className="hpbox" style={{ left: 12, top: 'calc(12px + var(--safe-t))' }}>
         <div className="row between"><span className="nm">{sp && stage !== 'identify' ? sp.common : 'Wild bird'}</span><span className="nm">{s ? `Lv${s.level ?? 5}` : 'Lv?'}</span></div>
         {sp && stage !== 'identify' && stage !== 'search' && <div style={{ marginTop: 2 }}><Types sp={sp} /></div>}
-        <div className="row between" style={{ fontSize: 10, fontFamily: 'var(--px)', marginTop: 4 }}><span>SNAP POWER</span><span>{job.mode === 'field' ? snapPower : '—'}</span></div>
+        <div className="row between" style={{ fontSize: 10, fontFamily: 'var(--px)', marginTop: 4 }}><span>SNAP POWER</span><span>{job.mode === 'field' ? `${snapGrade(snapPower)} · ${snapPower}` : '—'}</span></div>
         <div className="hpbar"><i style={{ width: `${job.mode === 'field' ? snapPower : 50}%`, background: snapPower > 70 ? '#6FA84B' : snapPower > 40 ? '#E8A33D' : '#A8452F' }} /></div>
       </div>
       {/* the bird's platform */}

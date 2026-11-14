@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, counts, speciesOf, logEvent } from '../../app/store';
+import { useGame, counts, speciesOf, logEvent, claimChapter } from '../../app/store';
+import { chaptersFor, chapterProgress } from '../../core/chapters';
+import { playClip } from '../../app/audio';
 import { getRegion } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus } from '../../data/provider';
 import { typesOf, BirdType, GROUP_PLURAL, GROUP_TYPES, PLACE_TYPES } from '../../core/rarity';
@@ -22,6 +24,7 @@ export function Dex() {
   const [group, setGroup] = useState<BirdType | ''>('');
   const [place, setPlace] = useState<BirdType | ''>('');
   const [q, setQ] = useState('');
+  const [chap, setChap] = useState<string | null>(null);
   useEffect(() => { logEvent('journal_open'); ensureRegion(st.region); return onProviderChange(() => force((x) => x + 1)); }, [st.region]);
   useEffect(() => { if (nav.highlight) { const t = setTimeout(() => nav.setHighlight(null), 2600); return () => clearTimeout(t); } }, [nav.highlight]);
 
@@ -34,7 +37,12 @@ export function Dex() {
   }, [st.sightings]);
   const have = entries.filter((e) => mine.has(e.sp.id)).length;
   const outside = [...mine.keys()].filter((id) => !entries.some((e) => e.sp.id === id));
-  const pending = st.sightings.filter((s) => !counts(s));
+  const pending = st.sightings.filter((s) => !counts(s) && s.mode !== 'seen');
+  const seenIds = new Set(st.sightings.filter((s) => s.mode === 'seen').map((s) => s.speciesId));
+  const chapters = useMemo(() => chaptersFor(entries), [entries.length, st.region]);
+  const found = new Set(mine.keys());
+  const current = chapters.find((c) => chapterProgress(c, found) < c.ids.length || !st.chapters?.[c.id]) ?? chapters[0];
+  const chapSet = chap ? new Set(chapters.find((c) => c.id === chap)?.ids ?? []) : null;
   const present = new Set(entries.flatMap((e) => typesOf(e.sp)));
   const groups = GROUP_TYPES.filter((t) => present.has(t));
   // each group: how many birds, and the most familiar local example, so the menu explains itself
@@ -45,6 +53,7 @@ export function Dex() {
 
   const shown = entries.filter((e) => {
     const caught = mine.has(e.sp.id);
+    if (chapSet && !chapSet.has(e.sp.id)) return false;
     if (filter === 'found' && !caught) return false;
     if (filter === 'missing' && caught) return false;
     if (group && typesOf(e.sp)[0] !== group) return false;
@@ -55,12 +64,27 @@ export function Dex() {
 
   return (
     <div className="screen with-tabs">
-      <PageHeader title="BirdDex" sub={`${region.flag ?? ''} ${region.name} · ${have} of ${entries.length} discovered`} right={<FeatherChip />} />
-      <div className="panel" style={{ padding: 10 }}>
-        <Meter value={have} max={Math.max(1, entries.length)} tone="sun" label="BirdDex completion" />
-        <div className="row between small mt8"><span className="muted">{entries.length - have} still to find here</span><span>Life list <b className="num">{mine.size}</b></span></div>
-        {providerStatus(st.region) === 'loading' && <div className="small muted mt8">Updating the list for {region.name}…</div>}
+      <PageHeader title="BirdDex" sub={`${region.flag ?? ''} ${region.name} · ${current ? `${current.name}: ${chapterProgress(current, found)}/${current.ids.length}` : `${have} discovered`}`} right={<FeatherChip />} />
+      <div className="label mb8">Chapters</div>
+      <div className="hscroll chapters" role="list" aria-label="BirdDex chapters">
+        {chapters.map((c) => {
+          const n = chapterProgress(c, found), done = n >= c.ids.length, claimed = !!st.chapters?.[c.id];
+          return (
+            <div key={c.id} role="listitem" className={`chapter ${chap === c.id ? 'on' : ''} ${done ? 'done' : ''}`}>
+              <button className="chapter-main" onClick={() => setChap(chap === c.id ? null : c.id)} aria-pressed={chap === c.id} aria-label={`${c.name}: ${n} of ${c.ids.length}. ${chap === c.id ? 'Showing only this chapter' : 'Show this chapter'}`}>
+                <span className="name small">{c.name}</span>
+                <span className="small muted chapter-blurb">{c.blurb}</span>
+                <Meter value={n} max={c.ids.length} tone="sun" label={`${c.name} progress`} />
+                <span className="row between small"><span className="num">{n}/{c.ids.length}</span><span className="muted">{claimed ? '✓ Claimed' : `+${c.reward} Feathers`}</span></span>
+              </button>
+              {done && !claimed && <button className="btn small primary block" onClick={() => { if (claimChapter(c.id, c.reward)) { playClip('levelUp'); nav.toast(`${c.name} complete! +${c.reward} Feathers`); } }}>Claim reward</button>}
+            </div>
+          );
+        })}
       </div>
+      {chap && <button className="link" onClick={() => setChap(null)}>Show the whole BirdDex ({have}/{entries.length})</button>}
+      <div className="row between small mt8 mb8"><span className="muted">Whole region: {have} of {entries.length}</span><span>Life list <b className="num">{mine.size}</b></span></div>
+      {providerStatus(st.region) === 'loading' && <div className="small muted mb8">Updating the list for {region.name}…</div>}
 
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your birds or a dex number" aria-label="Search BirdDex"
         style={{ width: '100%', minHeight: 44, padding: '6px 12px', background: 'var(--well)', border: '2px solid var(--smoke)', marginBottom: 8 }} />
@@ -106,10 +130,10 @@ export function Dex() {
             if (!s) {
               return (
                 <li key={e.sp.id}>
-                  <button className="jcell missing" onClick={() => nav.open({ name: 'species', id: e.sp.id })} aria-label={`${dexNo(e.dex)}, not discovered yet`}>
+                  <button className={`jcell missing ${seenIds.has(e.sp.id) ? 'seen' : ''}`} onClick={() => nav.open({ name: 'species', id: e.sp.id })} aria-label={seenIds.has(e.sp.id) ? `${dexNo(e.dex)} ${e.sp.common}, seen but not photographed yet` : `${dexNo(e.dex)}, not discovered yet`}>
                     <span className="dexno" style={{ alignSelf: 'flex-start' }}>{dexNo(e.dex)}</span>
                     <Sprite species={e.sp} mode="silhouette" scale={2} />
-                    <span className="cap muted">???</span>
+                    <span className="cap muted">{seenIds.has(e.sp.id) ? `Seen: ${e.sp.common}` : '???'}</span>
                   </button>
                 </li>
               );

@@ -1,3 +1,4 @@
+import { MerlinTip } from '../MerlinTip';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, setState, logEvent } from '../../app/store';
@@ -123,6 +124,7 @@ export function Viewfinder() {
           <h2>BirdlyQuest needs your camera to discover real birds.</h2>
           <p className="muted small">Photos stay on this phone. Location is never read from them.</p>
           <button className="btn primary big block" onClick={start}>Allow camera</button>
+          <button className="btn ghost block" onClick={() => nav.replace({ name: 'quicklog' })}>Saw a bird? Log it without a photo</button>
           <button className="btn ghost block" onClick={() => nav.replace({ name: 'sketch' })}>Sketch it instead</button>
         </div>
       </div>
@@ -173,6 +175,7 @@ export function Viewfinder() {
         </div>
       </div>
       <div style={{ padding: '8px 16px calc(12px + var(--safe-b))', background: 'var(--ink)' }}>
+        <MerlinTip id="camera" placement="inline" />
         <button className="btn ghost block small" onClick={() => setShowList((v) => !v)} aria-expanded={showList} style={{ justifyContent: 'flex-start', textTransform: 'none', fontFamily: 'var(--body)', letterSpacing: 0 }}>
           <span className="px" style={{ fontSize: 11, color: 'var(--accent)' }}>Likely</span>&nbsp;{short.map((l) => l.sp.common.split(' ').pop()).join(' · ')}
         </button>
@@ -192,6 +195,7 @@ export function Viewfinder() {
           <button className="shutter ready" onClick={shoot} disabled={cam !== 'live'} aria-label="Shutter"><Icon name="photo" size={28} color="var(--ink)" /></button>
           <button className="btn ghost small" onClick={() => fileRef.current?.click()} aria-label="Import a photo from today">Import</button>
         </div>
+        <button className="btn ghost block small mt8" onClick={() => nav.replace({ name: 'quicklog' })}>It flew off? Log it without a photo</button>
         {importErr && <p className="small" role="alert" style={{ color: 'var(--oriole)' }}>{importErr}</p>}
         {importInput}
       </div>

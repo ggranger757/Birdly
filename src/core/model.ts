@@ -70,7 +70,14 @@ export interface GameState {
   partner: { speciesId: string; parts: number[] } | null;
   speciesDefs: Record<string, Species>; // live species the player has caught, kept for offline use
   items: { seeds: number; berries: number; worms: number }; // food bags in the pantry
-  lenses: string[]; lens: string; // owned Snap Lenses and the one in use
+  lenses: string[]; lens: string;
+  tutorialDone?: boolean;
+  tourOn?: boolean;       // Merlin's full tour is running (started from Settings)
+  tipsSeen?: string[];
+  petGifts?: Record<string, string>; // bird id → day it last brought a gift
+  lastSeenAt?: string;               // last time the app was open (for welcome-back care)
+  mission?: { speciesId: string; name: string; lat: number; lng: number; until: string } | null; // go-find-it mission from a live sighting    // one-time Merlin tips already dismissed
+  chapters?: Record<string, string>; // claimed BirdDex chapter rewards (id → ISO date) // Merlin's guided tour finished or skipped // owned Snap Lenses and the one in use
   feeder: { level: number };       // food points in the Aviary feeder
   petDay: string | null;           // last day the aviary paid out Feathers
   stats: { fills: number; spent: number; quests: number };

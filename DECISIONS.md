@@ -31,6 +31,16 @@ One line per meaningful choice, with the reason.
 - **Live data needs no login.** iNaturalist read endpoints are public with CORS `*`; Explore shows a live status, refreshes every 5 minutes, lists the latest nearby reports, and Settings has a live-data check.
 - **Sound only while the app is on screen.** All audio pauses on visibilitychange/pagehide and resumes on return.
 
-- **Snap Lenses are cosmetic.** Five lenses (Ripple free; Bubble, Ember, Arcane, Phantom bought with Feathers in Merlin's Shop) tint the capsule and play an owner-supplied fx sheet when a bird is recorded. They replace the old explosion; they never change XP or odds.
+- **Snap Lenses boost Snap Power.** Five lenses (Ripple free +0; Bubble +5, Ember +10, Arcane +15, Phantom +20, bought with Feathers) add to the photo score of camera shots (capped at 100), which raises XP. Each also tints the capsule and plays an owner-supplied fx sheet when a bird is recorded, replacing the old explosion. Viewable and switchable on the Trainer page and in Merlin's Shop.
+- **Merlin's guided tour** runs once after onboarding (and on first launch of this version for existing players). It spotlights the real UI on each tab; skippable, keyboard-operable (Esc, arrows) and replayable from Settings.
 - **Snap Power is explained where it appears** (onboarding, the result dialog, and the label on the info box): it is the photo score out of 100 and only affects XP.
 - **Colour themes:** Neon (default), Dusk, Ember and Field guide (light). Each passes axe-core colour-contrast on every main screen (WCAG 2.1 AA, Section 508).
+- **Identification is a skill moment.** Picking a candidate opens a side-by-side compare (your photo vs a CC reference photo + short description) before confirming; "Try next" flips through the shortlist.
+- **First win, fast.** The first discovery pays double XP and Feathers. "It flew off? Log it without a photo" records a seen-only sighting (4 Feathers, 0.25× XP) that marks the BirdDex cell as seen but never counts as discovered or joins the Aviary.
+- **BirdDex chapters** (Backyard 12, Park & Woods 20, Water 15, Hunters 10, and a monthly "specials" set from iNaturalist month counts) give finishable goals with Feather rewards; the whole-region total is secondary.
+- **One progression number.** Level (1 + √(XP/30)) is primary; rank names are titles. Snap Power shows as a grade (S ≥90, A ≥75, B ≥55, C ≥35, D).
+- **Just-in-time help.** Merlin shows a one-time tip on each tab and in the camera; the full 12-step tour only runs from Settings → Replay.
+- **Shop everywhere.** The Feather counter opens Merlin's Shop as its own screen.
+- **Missions** turn the freshest nearby sighting of a bird you still need into a 3-hour goal (+25 XP, +25 Feathers), with walking directions via Google Maps.
+- **Pets you can touch; hunger that forgives.** Tapping a bird makes it hop and chirp and shows its HP and mood; each bird gives 3 Feathers once a day. After 20+ hours away, Merlin feeds weak Aviary birds back to 50 HP and says so.
+- **Settings diet.** Grid, reference photos, live-data check, sprite lab and diagnostics live under Advanced. Diagnostics shows a local player-journey summary (no data leaves the phone).

@@ -1,6 +1,6 @@
 // Game state: one local store, persisted to IndexedDB on every change.
 import { SCENES } from '../render/diorama';
-import { LENSES, type LensId } from '../core/lenses';
+import { LENSES, boostedPower, type LensId } from '../core/lenses';
 import { useSyncExternalStore } from 'react';
 import type { GameState, Sighting, Verification, ChallengeSlot } from '../core/model';
 import { UNKNOWN } from '../core/model';
@@ -129,6 +129,8 @@ export interface CatchResult {
   badges: Badge[];
   rankUp: string | null;
   levelUp: { level: number; homes: string[] } | null;
+  firstEver?: boolean;
+  missionDone?: boolean;
   previousXp: number;
 }
 
@@ -149,7 +151,7 @@ export function speciesOf(s: Sighting): Species {
 }
 
 /** Counts toward completion: verified or self-reported, not vagrant-pending or unverified. */
-export const counts = (x: Sighting) => !!x.speciesId && (x.verification === 'verified' || x.verification === 'self-reported');
+export const counts = (x: Sighting) => !!x.speciesId && x.mode !== 'seen' && (x.verification === 'verified' || x.verification === 'self-reported');
 
 export function plumagesOf(st: GameState, speciesId: string): Sighting[] {
   return st.sightings.filter((x) => x.speciesId === speciesId && (x.firstRecord || x.newPlumage));
@@ -163,8 +165,11 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   const palette: PhotoPalette | null = input.analysis?.palette ?? null;
   const sprite = assembleSprite(sp, palette, hash);
 
-  const prior = input.speciesId ? state.sightings.filter((x) => x.speciesId === input.speciesId) : [];
-  const firstRecord = !!input.speciesId && prior.length === 0;
+  // "seen" logs (no photo) never make a bird discovered, so a later photo is still a first record
+  const prior = input.speciesId ? state.sightings.filter((x) => x.speciesId === input.speciesId && x.mode !== 'seen') : [];
+  const seen = input.mode === 'seen';
+  const firstRecord = !seen && !!input.speciesId && prior.length === 0;
+  const firstEver = !seen && !!input.speciesId && !state.sightings.some(counts);
   const regionFirst = !!input.speciesId && !prior.some((x) => x.region === state.region);
   const plumages = input.speciesId ? plumagesOf(state, input.speciesId) : [];
   const newPlumage = !firstRecord && plumages.length > 0 && plumages.length < 4 &&
@@ -172,15 +177,21 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
 
   const score = input.speciesId ? lns(sp, region, at, input.habitat) : 0.9;
   const rarity: Rarity = rarityOf(score);
-  const fc = input.analysis?.score ?? null;
+  const fc0 = input.analysis?.score ?? null;
+  // the equipped Snap Lens boosts Snap Power on field photos
+  const fc = fc0 && input.mode === 'field' ? { ...fc0, total: boostedPower(fc0.total, state.lens) } : fc0;
   const streakBefore = state.streak;
   const streak = applyStreak(streakBefore, dayKey(at));
-  const xp = catchXp({
+  const xp0 = catchXp({
     newSpecies: firstRecord && input.verification !== 'vagrant', regionFirst, fieldcraft: fc?.total ?? 0,
     rarity, streakDays: streak.days, mode: input.mode,
   });
   // Feathers are the in-game currency: every real catch pays, new species pay most
-  const feathers = (firstRecord ? 20 : 12) + (newPlumage ? 20 : 0);
+  const feathers0 = seen ? 4 : (firstRecord ? 20 : 12) + (newPlumage ? 20 : 0);
+  // first-bird bonus: the very first discovery pays double, so day one ends with a win
+  // missions: find the bird you set out for in time for a bonus
+  const missionDone = !seen && !!state.mission && state.mission.speciesId === input.speciesId && at.getTime() < Date.parse(state.mission.until);
+  const xp = (firstEver ? xp0 * 2 : xp0) + (missionDone ? 25 : 0), feathers = (firstEver ? feathers0 * 2 : feathers0) + (missionDone ? 25 : 0);
 
   const id = uuid();
   let photoId: string | null = null;
@@ -204,6 +215,7 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   let next: GameState = {
     ...state, sightings: [sighting, ...state.sightings], xp: state.xp + xp, feathers: state.feathers + feathers, streak,
     speciesDefs: sp.inatId && sp.id.startsWith('inat-') ? { ...state.speciesDefs, [sp.id]: sp } : state.speciesDefs,
+    mission: missionDone ? null : state.mission,
   };
   if (state.firstCatchSeconds === null) {
     next.firstCatchSeconds = Math.round((at.getTime() - new Date(state.installStartedAt).getTime()) / 1000);
@@ -211,7 +223,8 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   }
   // auto-place the first few birds in the diorama so the habitat is never empty
   // new catches move into the Aviary while there is room; otherwise they rest in the Bird Box
-  if (next.diorama.birds.length < AVIARY_MAX) next.diorama = { ...next.diorama, birds: [...next.diorama.birds, id] };
+  if (seen) { /* seen-only logs stay in your journal, not the Aviary */ }
+  else if (next.diorama.birds.length < AVIARY_MAX) next.diorama = { ...next.diorama, birds: [...next.diorama.birds, id] };
   else next.sightings = next.sightings.map((x) => (x.id === id ? rest(x, at) : x));
   const earned = newlyEarned(next);
   if (earned.length) {
@@ -227,7 +240,7 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   const rankAfter = rankFor(state.xp).name;
   const lvA = trainerLevel(previousXp).level, lvB = trainerLevel(state.xp).level;
   const homes = Object.values(SCENES).filter((h) => h.level > lvA && h.level <= lvB).map((h) => h.label);
-  return { sighting, species: sp, badges: earned, rankUp: rankAfter !== rankBefore ? rankAfter : null, levelUp: lvB > lvA ? { level: lvB, homes } : null, previousXp };
+  return { sighting, species: sp, badges: earned, rankUp: rankAfter !== rankBefore ? rankAfter : null, levelUp: lvB > lvA ? { level: lvB, homes } : null, previousXp, firstEver, missionDone };
 }
 
 function fakeHash(s: string) {
@@ -377,6 +390,20 @@ export function buyFood(food: Food, qty = 1): boolean {
   return after(true);
 }
 
+/** Start (or drop) a mission to go and find a bird from a live sighting. Lasts 3 hours. */
+export function setMission(m: { speciesId: string; name: string; lat: number; lng: number } | null) {
+  setState((s) => ({ ...s, mission: m ? { ...m, until: new Date(Date.now() + 3 * 3600e3).toISOString() } : null }));
+  if (m) logEvent('mission_start', m.speciesId);
+}
+
+/** Claim a finished BirdDex chapter's Feather reward (once). */
+export function claimChapter(id: string, reward: number): boolean {
+  if (state.chapters?.[id]) return false;
+  setState((s) => ({ ...s, feathers: s.feathers + reward, chapters: { ...(s.chapters ?? {}), [id]: new Date().toISOString() } }));
+  logEvent('chapter_claim', id);
+  return after(true);
+}
+
 /** Buy a Snap Lens with Feathers and put it on. */
 export function buyLens(id: LensId): boolean {
   const l = LENSES[id];
@@ -405,6 +432,32 @@ export function tickFeeder(now = new Date()): Meal[] {
   const by = new Map(r.birds.map((b) => [b.id, b]));
   setState((s) => ({ ...s, feeder: { level: r.level }, sightings: s.sightings.map((x) => by.get(x.id) ?? x) }));
   return after(r.meals);
+}
+
+/** Tapping a bird: once a day each one brings you a little gift. Returns Feathers gained. */
+export function petBird(id: string, now = new Date()): number {
+  const day = dayKey(now);
+  if (id === 'partner' || state.petGifts?.[id] === day) return 0;
+  setState((s) => ({ ...s, feathers: s.feathers + 3, petGifts: { ...(s.petGifts ?? {}), [id]: day } }));
+  return 3;
+}
+
+/**
+ * Welcome back: if you've been away a day or more, Merlin feeds any weak Aviary birds back to 50 HP.
+ * Returns how many birds he fed. Always records that you're here now.
+ */
+export function welcomeBack(now = new Date()): number {
+  const away = state.lastSeenAt ? now.getTime() - Date.parse(state.lastSeenAt) : 0;
+  let fed = 0;
+  let sightings = state.sightings;
+  if (away > 20 * 3600e3) {
+    sightings = state.sightings.map((x) => {
+      if (!inAviary(x.id) || hpNow(x, now) >= 40) return x;
+      fed++; return { ...x, pet: { hp: 50, at: now.toISOString() } };
+    });
+  }
+  setState((s) => ({ ...s, sightings, lastSeenAt: now.toISOString() }));
+  return fed;
 }
 
 /** Once a day, each healthy Aviary bird brings you 2 Feathers. */

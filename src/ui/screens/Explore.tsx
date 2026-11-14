@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Leaflet from 'leaflet';
 import { useNav } from '../nav';
-import { useGame, counts, refreshChallenges, setRegion } from '../../app/store';
+import { useGame, counts, refreshChallenges, setRegion, setMission } from '../../app/store';
 import { getRegion, regionLabel } from '../../data/geo';
 import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs } from '../../data/provider';
 import { likelyNow } from '../../core/rarity';
@@ -238,6 +238,17 @@ export function Explore() {
             ]} /></div>
             <button className="btn small" style={{ minHeight: 44 }} onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'All'}</button>
           </div>
+          {view === 'latest' && <MissionCard feed={feed} caught={caught} />}
+          {view === 'likely' && (() => {
+                const inSeason = entries.filter((e) => !e.sp.sensitive && e.seasonal > 0.6 && e.freq < 0.85).sort((a, b) => b.seasonal - a.seasonal).slice(0, 4);
+                if (inSeason.length < 2) return null;
+                const month = new Date().toLocaleString(undefined, { month: 'long' });
+                return (
+                  <div className="season-banner" role="note">
+                    <span className="mission-tag">In season</span> This {month} in {region.name}: {inSeason.map((e, i) => <span key={e.sp.id}>{i ? ', ' : ''}<button className="link" style={{ minHeight: 0, padding: 0 }} onClick={() => openSp(e.sp)}>{e.sp.common}</button></span>)}. Look for them before they move on!
+                  </div>
+                );
+          })()}
           {view === 'latest' ? (
             feed.list.length === 0 ? (
               <p className="small muted" style={{ margin: '4px 0' }}>
@@ -303,6 +314,36 @@ export function Explore() {
           <RegionPicker value={st.region} onPick={(code) => { setRegion(code); setPickRegion(false); nav.toast(`Region: ${regionLabel(code)}`); }} />
         </Sheet>
       )}
+    </div>
+  );
+}
+
+const directions = (lat: number, lng: number) => `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(5)},${lng.toFixed(5)}&travelmode=walking`;
+
+/** Turns the freshest nearby sighting of a bird you still need into a 3-hour mission. */
+function MissionCard({ feed, caught }: { feed: Feed; caught: Set<string | null> }) {
+  const mission = useGame((s) => s.mission);
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t); }, []);
+  const live = mission && Date.parse(mission.until) > Date.now() ? mission : null;
+  if (live) {
+    const left = Math.max(0, Date.parse(live.until) - Date.now()), h = Math.floor(left / 3600e3), m = Math.floor((left % 3600e3) / 60000);
+    return (
+      <div className="mission on" role="status">
+        <div className="grow"><span className="mission-tag">Mission</span> Find a <b>{live.name}</b><br /><span className="small muted">{h ? `${h}h ` : ''}{m}m left · +25 Feathers and +25 XP</span></div>
+        <a className="btn small" href={directions(live.lat, live.lng)} target="_blank" rel="noopener">Directions</a>
+        <button className="btn small ghost" onClick={() => { sfx.back(); setMission(null); }} aria-label="Drop this mission">✕</button>
+      </div>
+    );
+  }
+  const fresh = feed.list.filter((o) => !caught.has(o.sp.id) && !o.sp.sensitive && (!o.observedAt || Date.now() - Date.parse(o.observedAt) < 48 * 3600e3));
+  if (!fresh.length) return null;
+  const pick = feed.from ? fresh.slice().sort((a, b) => km(feed.from!, [a.lat, a.lng]) - km(feed.from!, [b.lat, b.lng]))[0] : fresh[0];
+  const dist = feed.from ? ` ${km(feed.from, [pick.lat, pick.lng]).toFixed(1)} km away,` : '';
+  return (
+    <div className="mission">
+      <div className="grow"><span className="mission-tag">Mission</span> A <b>{pick.sp.common}</b> was seen{dist} {pick.observedAt ? agoTime(pick.observedAt) : ago(pick.observedOn)}. Go find it!</div>
+      <button className="btn small primary" onClick={() => { sfx.select(); setMission({ speciesId: pick.sp.id, name: pick.sp.common, lat: pick.lat, lng: pick.lng }); }}>Accept</button>
     </div>
   );
 }

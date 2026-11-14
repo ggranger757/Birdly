@@ -1,6 +1,6 @@
 import { Component, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { NavCtx, Nav, Route, Tab } from './nav';
-import { useGame, isReady, getState, hungryCount, tickFeeder } from '../app/store';
+import { useGame, isReady, getState, hungryCount, tickFeeder , welcomeBack } from '../app/store';
 import { Icon, Toast } from './components';
 import { Boot, Onboarding } from './screens/Onboarding';
 import { Explore } from './screens/Explore';
@@ -29,6 +29,8 @@ function renderRoute(r: Route) {
     case 'viewfinder': return <Viewfinder />;
     case 'catch': return <CatchFlow job={r.job} />;
     case 'sketch': return <Sketch />;
+    case 'quicklog': return <QuickLog />;
+    case 'shop': return <Shop />;
     case 'badges': return <BadgesScreen />;
     case 'challenges': return <ChallengesScreen />;
     case 'settings': return <Settings />;
@@ -46,9 +48,15 @@ function hasClaimable() {
 
 const THEME_BAR: Record<string, string> = { neon: '#0A0C0F', dusk: '#0E0B22', ember: '#150906', field: '#EADCBC' };
 
+import { Tutorial } from './Tutorial';
+import { QuickLog } from './screens/QuickLog';
+import { MerlinTip } from './MerlinTip';
+import { Shop } from './screens/Shop';
+
 export function App() {
   const ready = useGame(() => isReady());
   const onboarded = useGame((s) => s.onboarded);
+  const tourOn = useGame((s) => !!s.tourOn);
   const dys = useGame((s) => s.settings.dyslexiaFont);
   const theme = useGame((s) => ((s.settings.theme as string) === 'forest' ? 'ember' : s.settings.theme) ?? 'neon');
   const motion = useGame((s) => s.settings.motion);
@@ -73,6 +81,14 @@ export function App() {
   }, [dys, motion, theme]);
 
   useEffect(() => { const t = setInterval(() => tickFeeder(), 60000); return () => clearInterval(t); }, []);
+  // welcome back: Merlin looks after weak birds if you've been away a while
+  useEffect(() => {
+    if (!ready || !onboarded) return;
+    const check = () => { if (document.visibilityState !== 'visible') return; const n = welcomeBack(); if (n) setToast(`Welcome back! Merlin fed ${n} hungry bird${n > 1 ? 's' : ''} while you were away.`); };
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+  }, [ready, onboarded]);
 
   useEffect(() => {
     const onPop = () => { if (stackRef.current.length) setStack((s) => s.slice(0, -1)); };
@@ -119,6 +135,8 @@ export function App() {
         {stack.map((r, i) => <div key={i} style={{ display: 'contents' }} aria-hidden={i < stack.length - 1}>{renderRoute(r)}</div>)}
         <BadgePopup blocked={stack.some((r) => r.name === 'catch')} />
         {toast && <Toast text={toast} onDone={() => setToast(null)} />}
+        {tourOn && stack.length === 0 && <Tutorial setTab={setTab} onDone={() => setTab('explore')} />}
+        {!tourOn && stack.length === 0 && !toast && <MerlinTip id={tab} />}
       </div>
       <p className="desk-note"><b>BIRDLYQUEST</b> is built for phones. Open this page on your phone and add it to your home screen to play.</p>
     </NavCtx.Provider>
