@@ -1,6 +1,6 @@
-// DAT-4 Likely Now Score, DAT-5 rarity tiers, spawn weights. Pure functions.
+// DAT-4 Likely Now Score, DAT-5 rarity tiers, spawn weights. Works on any region's entries.
 import type { Species, Habitat, Region } from '../data/types';
-import { SPECIES } from '../data/species';
+import { regionEntries, RegionEntry } from '../data/provider';
 import { sunTimes, dayPhase, DayPhase } from './sun';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'mega' | 'legendary';
@@ -9,24 +9,14 @@ export const RARITY_META: Record<Rarity, { label: string; glyph: string; color: 
   common: { label: 'Common', glyph: '●', color: 'var(--ash)', mult: 1 },
   uncommon: { label: 'Uncommon', glyph: '◆', color: 'var(--moss)', mult: 1.5 },
   rare: { label: 'Rare', glyph: '★', color: 'var(--river)', mult: 2.5 },
-  mega: { label: 'Mega', glyph: '✦', color: 'var(--violet-text)', mult: 5 },
+  mega: { label: 'Epic', glyph: '✦', color: 'var(--violet-text)', mult: 5 },
   legendary: { label: 'Legendary', glyph: '♛', color: 'var(--sun)', mult: 10 },
 };
 
 export interface Conditions { weather?: 'clear' | 'cloud' | 'rain' | 'snow' | 'fog' | 'storm'; tempC?: number }
 
-export function regionSpecies(region: string): Species[] {
-  return SPECIES.filter((s) => s.occ[region]);
-}
-
-function month(d: Date, south: boolean) {
-  const m = d.getMonth(); // 0–11
-  return south ? (m + 6) % 12 : m;
-}
-
-/** Seasonal presence 0–1 for a season code in the (hemisphere-adjusted) month. */
 export function seasonalIndex(season: string, d: Date, south: boolean): number {
-  const m = month(d, south);
+  const m = (d.getMonth() + (south ? 6 : 0)) % 12;
   switch (season) {
     case 'R': return 1;
     case 'S': return [0.1, 0.1, 0.35, 0.8, 1, 1, 1, 1, 0.85, 0.5, 0.15, 0.1][m];
@@ -49,19 +39,21 @@ export function weatherFit(sp: Species, c?: Conditions): number {
   if (!c?.weather) return 0.7;
   if (c.weather === 'storm') return 0.3;
   if (c.weather === 'rain') return sp.habitats.includes('water') ? 0.8 : 0.5;
-  if (c.weather === 'snow') return sp.occ && sp.archetype !== 'hummingbird' ? 0.6 : 0.2;
+  if (c.weather === 'snow') return sp.archetype !== 'hummingbird' ? 0.6 : 0.2;
   return 0.9;
 }
 
-export function lns(sp: Species, region: Region, d: Date, habitat: Habitat, c?: Conditions): number {
-  const o = sp.occ[region.code];
-  if (!o) return 0;
-  const [freq, season] = o;
-  const si = seasonalIndex(season, d, region.south);
+export function lnsOf(e: RegionEntry, region: Region, d: Date, habitat: Habitat, c?: Conditions): number {
   const phase = dayPhase(d, sunTimes(d, region.lat, region.lng));
-  const v = 0.4 * freq * si + 0.25 * si + 0.15 * timeOfDayFit(sp.activity, phase)
-    + 0.1 * (sp.habitats.includes(habitat) ? 1 : 0.3) + 0.1 * weatherFit(sp, c);
+  const v = 0.4 * e.freq * e.seasonal + 0.25 * e.seasonal + 0.15 * timeOfDayFit(e.sp.activity, phase)
+    + 0.1 * (e.sp.habitats.includes(habitat) ? 1 : 0.3) + 0.1 * weatherFit(e.sp, c);
   return Math.max(0, Math.min(1, v));
+}
+
+/** LNS for one species in a region (0 when it is not on the region's list). */
+export function lns(sp: Species, region: Region, d: Date, habitat: Habitat, c?: Conditions): number {
+  const e = regionEntries(region.code, d).find((x) => x.sp.id === sp.id);
+  return e ? lnsOf(e, region, d, habitat, c) : 0;
 }
 
 export function rarityOf(score: number): Rarity {
@@ -73,30 +65,43 @@ export function rarityOf(score: number): Rarity {
   return 'legendary';
 }
 
+export function regionSpecies(code: string): Species[] {
+  return regionEntries(code).map((e) => e.sp);
+}
+
+export interface Likely { sp: Species; score: number; rarity: Rarity; dex: number }
+
+export function likelyNow(region: Region, d: Date, habitat: Habitat, c?: Conditions): Likely[] {
+  return regionEntries(region.code, d)
+    .map((e) => { const score = lnsOf(e, region, d, habitat, c); return { sp: e.sp, score, rarity: rarityOf(score), dex: e.dex }; })
+    .sort((a, b) => b.score - a.score || a.sp.id.localeCompare(b.sp.id));
+}
+
 export function spawnWeight(score: number, irruption = false): number {
   const w = Math.pow(Math.max(0.02, Math.min(1, score)), 1.5) * 100;
   return irruption ? w * 3 : w;
 }
 
-export interface Likely { sp: Species; score: number; rarity: Rarity }
-
-export function likelyNow(region: Region, d: Date, habitat: Habitat, c?: Conditions): Likely[] {
-  return regionSpecies(region.code)
-    .map((sp) => { const score = lns(sp, region, d, habitat, c); return { sp, score, rarity: rarityOf(score) }; })
-    .sort((a, b) => b.score - a.score || a.sp.id.localeCompare(b.sp.id));
-}
-
-/** DAT-6: highest-LNS species, active now, readable at 32px. */
-export function starterBird(region: Region, d: Date, habitat: Habitat): Species {
-  const list = likelyNow(region, d, habitat).filter(({ sp }) =>
-    sp.occ[region.code]?.[2] && sp.archetype !== 'hummingbird' && sp.activity !== 'nocturnal' && !sp.sensitive);
-  return (list[0] ?? likelyNow(region, d, habitat)[0]).sp;
-}
-
-/** Deterministic weighted pick with a supplied 0–1 roll. */
 export function weightedPick<T>(items: T[], weight: (t: T) => number, roll: number): T {
   const total = items.reduce((a, t) => a + weight(t), 0);
   let r = roll * total;
   for (const t of items) { r -= weight(t); if (r <= 0) return t; }
   return items[items.length - 1];
+}
+
+// ─── Bird types (collector-game flavour; derived from real anatomy and habitat) ───
+export type BirdType = 'Song' | 'Water' | 'Shore' | 'Sea' | 'Raptor' | 'Night' | 'Wood' | 'Jewel' | 'Ground' | 'Tropic' | 'Dive' | 'Clever' | 'City' | 'Forest' | 'Wetland';
+export const TYPE_COLOR: Record<BirdType, string> = {
+  Song: '#6FA84B', Water: '#2E6F9E', Shore: '#D9C26A', Sea: '#5AA9C9', Raptor: '#C2622F', Night: '#7B4FA8', Wood: '#8C5A2B',
+  Jewel: '#C94F7C', Ground: '#7A7A3F', Tropic: '#3F7A3F', Dive: '#1F3F6E', Clever: '#5B5A7A', City: '#8A8BA3', Forest: '#24553F', Wetland: '#4A3F8F',
+};
+export function typesOf(sp: Species): BirdType[] {
+  const a: Record<string, BirdType> = {
+    passerine: 'Song', corvid: 'Clever', raptor: 'Raptor', owl: 'Night', waterfowl: 'Water', wader: 'Shore', seabird: 'Sea',
+    woodpecker: 'Wood', hummingbird: 'Jewel', gamebird: 'Ground', parrot: 'Tropic', kingfisher: 'Dive',
+  };
+  const first = a[sp.archetype] ?? 'Song';
+  const hab: Record<Habitat, BirdType> = { urban: 'City', woodland: 'Forest', water: 'Wetland' };
+  const second = hab[sp.habitats[0]];
+  return second && second !== first ? [first, second] : [first];
 }

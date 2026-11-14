@@ -3,8 +3,8 @@ import { useSyncExternalStore } from 'react';
 import type { GameState, Sighting, Verification, ChallengeSlot } from '../core/model';
 import { UNKNOWN } from '../core/model';
 import type { Habitat, Species } from '../data/types';
-import { SPECIES_BY_ID } from '../data/species';
-import { REGION_BY_CODE, defaultRegionFromLocale } from '../data/regions';
+import { speciesById, registerSpecies, ensureRegion, regionEntries } from '../data/provider';
+import { getRegion, loadGeo, defaultRegionCode } from '../data/geo';
 import { assembleSprite, PhotoPalette, PIPELINE_VERSION } from '../core/pixel/sprite';
 import type { Analysis } from '../core/pixel/extract';
 import { lns, rarityOf, Rarity } from '../core/rarity';
@@ -15,6 +15,7 @@ import { sunTimes, dayPhase } from '../core/sun';
 import { deltaE2000 } from '../core/color';
 import { PAL_LAB } from '../core/color';
 import { P } from '../core/pixel/archetypes';
+import { FOODS, Food, hpNow, visitFeeder, rest, wake, Meal, AVIARY_MAX, FEEDER_CAP } from '../core/pets';
 import { loadState, saveState, putPhoto, getPhoto, photoKeys, deletePhoto as dbDeletePhoto, forgetPhotoURL } from './db';
 
 const VERSION = 1;
@@ -22,13 +23,15 @@ const VERSION = 1;
 export function freshState(): GameState {
   const now = new Date().toISOString();
   return {
-    version: VERSION, createdAt: now, onboarded: false, region: defaultRegionFromLocale(), habitat: 'urban',
+    version: VERSION, createdAt: now, onboarded: false, region: 'US', habitat: 'urban',
     xp: 0, feathers: 0, streak: { days: 0, last: null, freezes: 0, best: 0 }, sightings: [], badges: {},
     challenges: { day: '', daily: [], week: '', weekly: null, seasonal: null, history: {} },
     events: { sitSpots: [], shares: [] },
     diorama: { biome: 'urban', birds: [], decor: {} }, ownedDecor: [],
-    settings: { sound: true, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true },
+    settings: { sound: true, music: true, haptics: true, grid: true, motion: 'system', dyslexiaFont: false, refPhotos: true },
     sessions: 0, lastSession: null, backupPromptAfter: null, firstCatchSeconds: null, installStartedAt: now, log: [],
+    trainerName: '', partner: null, speciesDefs: {},
+    items: { seeds: 0, berries: 0, worms: 0 }, feeder: { level: 60 }, petDay: null,
   };
 }
 
@@ -60,10 +63,11 @@ export function logEvent(e: string, d?: unknown) {
 }
 
 function adopt(saved: GameState | undefined) {
-  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings } };
+  if (saved && saved.version) state = { ...freshState(), ...saved, settings: { ...freshState().settings, ...saved.settings }, items: { ...freshState().items, ...(saved.items ?? {}) }, feeder: saved.feeder ?? freshState().feeder };
 }
 
 export async function initStore() {
+  await loadGeo().catch(() => {});
   // Some browsers (older iOS Safari, in-app webviews, private modes) never answer IndexedDB.
   // Never block the first paint on it: start after 1.5s with an in-memory journal if needed.
   const load = loadState<GameState>().then((v) => ({ ok: true as const, v }), () => ({ ok: false as const, v: undefined }));
@@ -76,6 +80,10 @@ export async function initStore() {
       loadSettled = true; persist();
     });
   }
+  if (!state.onboarded && state.region === 'US') state = { ...state, region: defaultRegionCode() };
+  registerSpecies(Object.values(state.speciesDefs ?? {}));
+  ensureRegion(state.region).catch(() => {});
+  try { tickFeeder(); } catch { /* ignore */ }
   const today = dayKey(new Date());
   if (state.lastSession !== today || state.sessions === 0) state = { ...state, sessions: state.sessions + 1, lastSession: today };
   refreshChallenges(new Date(), false);
@@ -132,7 +140,7 @@ function meanDeltaE(a: number[], b: number[]): number {
 }
 
 export function speciesOf(s: Sighting): Species {
-  return (s.speciesId && SPECIES_BY_ID[s.speciesId]) || UNKNOWN;
+  return speciesById(s.speciesId) || UNKNOWN;
 }
 
 /** Counts toward completion: verified or self-reported, not vagrant-pending or unverified. */
@@ -144,8 +152,8 @@ export function plumagesOf(st: GameState, speciesId: string): Sighting[] {
 
 export async function fileCatch(input: CatchInput): Promise<CatchResult> {
   const at = input.at ?? new Date();
-  const region = REGION_BY_CODE[state.region];
-  const sp = (input.speciesId && SPECIES_BY_ID[input.speciesId]) || UNKNOWN;
+  const region = getRegion(state.region);
+  const sp = speciesById(input.speciesId) || UNKNOWN;
   const hash = input.analysis?.hash ?? fakeHash(`${sp.id}|${at.toISOString()}`);
   const palette: PhotoPalette | null = input.analysis?.palette ?? null;
   const sprite = assembleSprite(sp, palette, hash);
@@ -166,7 +174,8 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
     newSpecies: firstRecord && input.verification !== 'vagrant', regionFirst, fieldcraft: fc?.total ?? 0,
     rarity, streakDays: streak.days, mode: input.mode,
   });
-  const feathers = firstRecord ? 5 : 12 + (newPlumage ? 20 : 0);
+  // Feathers are the in-game currency: every real catch pays, new species pay most
+  const feathers = (firstRecord ? 20 : 12) + (newPlumage ? 20 : 0);
 
   const id = uuid();
   let photoId: string | null = null;
@@ -180,19 +189,25 @@ export async function fileCatch(input: CatchInput): Promise<CatchResult> {
     fieldcraft: fc ? { total: fc.total, sharpness: fc.sharpness, exposure: fc.exposure, size: fc.size, framing: fc.framing, separation: fc.separation } : null,
     coaching: fc?.coaching ?? [], rarity, xp, feathers, sprite, palette, photoId, firstRecord, newPlumage,
     timesSeen: prior.length + 1, note: '',
+    level: Math.min(100, 5 + Math.round((fc?.total ?? 40) / 5) + prior.length),
+    dex: regionEntries(state.region).find((e) => e.sp.id === sp.id)?.dex,
+    pet: { hp: 80, at: at.toISOString() },
   };
 
   const previousXp = state.xp;
   const rankBefore = rankFor(previousXp).name;
   let next: GameState = {
     ...state, sightings: [sighting, ...state.sightings], xp: state.xp + xp, feathers: state.feathers + feathers, streak,
+    speciesDefs: sp.inatId && sp.id.startsWith('inat-') ? { ...state.speciesDefs, [sp.id]: sp } : state.speciesDefs,
   };
   if (state.firstCatchSeconds === null) {
     next.firstCatchSeconds = Math.round((at.getTime() - new Date(state.installStartedAt).getTime()) / 1000);
     next.backupPromptAfter = new Date().toISOString();
   }
   // auto-place the first few birds in the diorama so the habitat is never empty
-  if (input.speciesId && next.diorama.birds.length < 3 && firstRecord) next.diorama = { ...next.diorama, birds: [...next.diorama.birds, id] };
+  // new catches move into the Aviary while there is room; otherwise they rest in the Bird Box
+  if (next.diorama.birds.length < AVIARY_MAX) next.diorama = { ...next.diorama, birds: [...next.diorama.birds, id] };
+  else next.sightings = next.sightings.map((x) => (x.id === id ? rest(x, at) : x));
   const earned = newlyEarned(next);
   if (earned.length) {
     const badges = { ...next.badges };
@@ -220,10 +235,11 @@ export function identifySighting(id: string, speciesId: string, verification: Ve
     ...s,
     sightings: s.sightings.map((x) => {
       if (x.id !== id) return x;
-      const sp = SPECIES_BY_ID[speciesId];
+      const sp = speciesById(speciesId)!;
       const first = !s.sightings.some((y) => y.id !== id && y.speciesId === speciesId);
       return { ...x, speciesId, verification, firstRecord: first, sprite: assembleSprite(sp, x.palette, x.sprite.hash) };
     }),
+    speciesDefs: speciesById(speciesId)?.id.startsWith('inat-') ? { ...s.speciesDefs, [speciesId]: speciesById(speciesId)! } : s.speciesDefs,
   }));
 }
 
@@ -266,8 +282,13 @@ export function recordShare() { setState((s) => ({ ...s, events: { ...s.events, 
 
 export function toggleHabitatBird(id: string): boolean {
   const has = state.diorama.birds.includes(id);
-  if (!has && state.diorama.birds.length >= 12) return false;
-  setState((s) => ({ ...s, diorama: { ...s.diorama, birds: has ? s.diorama.birds.filter((b) => b !== id) : [...s.diorama.birds, id] } }));
+  if (!has && state.diorama.birds.length >= AVIARY_MAX) return false;
+  const now = new Date();
+  setState((s) => ({
+    ...s,
+    diorama: { ...s.diorama, birds: has ? s.diorama.birds.filter((b) => b !== id) : [...s.diorama.birds, id] },
+    sightings: s.sightings.map((x) => (x.id === id ? (has ? rest(x, now) : wake(x, now)) : x)),
+  }));
   return true;
 }
 
@@ -302,12 +323,12 @@ export async function exportBackup(includePhotos: boolean): Promise<Blob> {
       if (b) photos[s.photoId] = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(b); });
     }
   }
-  return new Blob([JSON.stringify({ app: 'pixel-birder', version: VERSION, state, photos })], { type: 'application/json' });
+  return new Blob([JSON.stringify({ app: 'birdlyquest', version: VERSION, state, photos })], { type: 'application/json' });
 }
 
 export async function importBackup(file: File): Promise<number> {
   const data = JSON.parse(await file.text());
-  if (data.app !== 'pixel-birder' || !data.state) throw new Error('That file is not a PIXEL BIRDER backup.');
+  if ((data.app !== 'birdlyquest' && data.app !== 'pixel-birder') || !data.state) throw new Error('That file is not a BirdlyQuest backup.');
   for (const [id, url] of Object.entries<string>(data.photos ?? {})) {
     const blob = await (await fetch(url)).blob();
     await putPhoto(id, blob);
@@ -321,4 +342,57 @@ export async function resetAll() {
   for (const k of await photoKeys()) await dbDeletePhoto(String(k));
   state = freshState();
   emit(); await saveState(state);
+}
+
+export function setRegion(code: string) {
+  setState((s) => ({ ...s, region: code }));
+  ensureRegion(code).catch(() => {});
+}
+export function setTrainer(name: string) { setState((s) => ({ ...s, trainerName: name.slice(0, 16) })); }
+export function setPartner(sp: Species) {
+  const parts = assembleSprite(sp, null, `partner${sp.id}`).parts;
+  setState((s) => ({ ...s, partner: { speciesId: sp.id, parts }, speciesDefs: sp.id.startsWith('inat-') ? { ...s.speciesDefs, [sp.id]: sp } : s.speciesDefs }));
+}
+
+// ─── pets & feeder ───
+export const inAviary = (id: string) => state.diorama.birds.includes(id);
+
+export function buyFood(food: Food, qty = 1): boolean {
+  const cost = FOODS[food].price * qty;
+  if (state.feathers < cost) return false;
+  setState((s) => ({ ...s, feathers: s.feathers - cost, items: { ...s.items, [food]: s.items[food] + qty } }));
+  logEvent('buy_food', food);
+  return true;
+}
+
+/** Pour one bag from the pantry into the feeder. Returns points added (0 if full or no bag). */
+export function fillFeeder(food: Food): number {
+  if (state.items[food] <= 0 || state.feeder.level >= FEEDER_CAP) return 0;
+  const add = Math.min(FOODS[food].points, FEEDER_CAP - state.feeder.level);
+  setState((s) => ({ ...s, items: { ...s.items, [food]: s.items[food] - 1 }, feeder: { level: s.feeder.level + add } }));
+  return add;
+}
+
+/** Hungry Aviary birds eat from the feeder. Call often; it only changes state when someone eats. */
+export function tickFeeder(now = new Date()): Meal[] {
+  const ids = new Set(state.diorama.birds);
+  const birds = state.sightings.filter((x) => ids.has(x.id));
+  if (!birds.length) return [];
+  const r = visitFeeder(birds, state.feeder.level, now);
+  if (!r.meals.length) return [];
+  const by = new Map(r.birds.map((b) => [b.id, b]));
+  setState((s) => ({ ...s, feeder: { level: r.level }, sightings: s.sightings.map((x) => by.get(x.id) ?? x) }));
+  return r.meals;
+}
+
+/** Once a day, each healthy Aviary bird brings you 2 Feathers. */
+export function collectAviary(now = new Date()): number {
+  const today = dayKey(now);
+  if (state.petDay === today) return 0;
+  const n = state.sightings.filter((x) => inAviary(x.id) && hpNow(x, now) >= 60).length * 2;
+  setState((s) => ({ ...s, petDay: today, feathers: s.feathers + n }));
+  return n;
+}
+export function hungryCount(now = new Date()): number {
+  return state.sightings.filter((x) => inAviary(x.id) && hpNow(x, now) < 30).length;
 }

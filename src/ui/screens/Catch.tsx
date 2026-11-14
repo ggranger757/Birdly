@@ -3,178 +3,175 @@ import type { CaptureJob } from '../nav';
 import { useNav } from '../nav';
 import type { Analysis, FieldcraftScore } from '../../core/pixel/extract';
 import { analyze } from '../../app/photo';
-import { fileCatch, CatchResult, useGame, getState, logEvent, speciesCount } from '../../app/store';
-import { REGION_BY_CODE } from '../../data/regions';
-import { SPECIES, SPECIES_BY_ID, displayName } from '../../data/species';
+import { fileCatch, CatchResult, useGame, getState, logEvent } from '../../app/store';
+import { getRegion } from '../../data/geo';
+import { regionEntries, allKnownSpecies } from '../../data/provider';
 import type { Species } from '../../data/types';
-import { likelyNow, regionSpecies, rarityOf, lns, RARITY_META } from '../../core/rarity';
+import { likelyNow } from '../../core/rarity';
 import { renderFrames } from '../../core/pixel/sprite';
 import { RGB, CLEAR, IDX, HEX } from '../../core/palette';
 import { rgbToLab, snapToPalette } from '../../core/color';
-import { Sprite, RarityTag, Meter, Sheet, RefThumb, useReducedMotion, VERIFY_META, Icon } from '../components';
-import { sfx, haptic } from '../../app/audio';
+import { Sprite, useReducedMotion } from '../components';
+import { Dialog, Menu, Types, BirdThumb, Capsule, Wipe, dexNo, BadgeIcon, FxHit } from '../game';
+import { sfx, haptic, music } from '../../app/audio';
 import { RANK_LINES } from '../../core/xp';
 import type { Verification } from '../../core/model';
+import { paintSceneThumb } from '../../render/diorama';
+import { sunTimes, dayPhase } from '../../core/sun';
 
-function mergeScore(base: FieldcraftScore, o?: Partial<FieldcraftScore>): FieldcraftScore {
-  if (!o) return base;
-  const s = { ...base, ...o };
-  s.total = Math.round(s.sharpness + s.exposure + s.size + s.framing + s.separation);
-  const lines: string[] = [];
-  if ((o.framing ?? 0) >= 15) lines.push('Patient. You let it settle before you shot.');
-  if ((o.exposure ?? 20) < 12) lines.push('Low light. Window birds look best in the morning.');
-  if (base.separation < 8) lines.push('Busy background — wait for it on a clear perch.');
-  s.coaching = lines.length ? lines.slice(0, 2) : ['Locked focus. Clean frame.'];
-  return s;
-}
+type Stage = 'wipe' | 'spotted' | 'dark' | 'identify' | 'search' | 'appear' | 'throw' | 'caught';
 
 export function CatchFlow({ job }: { job: CaptureJob }) {
   const nav = useNav();
+  const regionCode = useGame((s) => s.region);
+  const habitat = useGame((s) => s.habitat);
+  const region = getRegion(regionCode);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [stage, setStage] = useState<'scoring' | 'dark' | 'confirm' | 'reveal'>('scoring');
+  const [stage, setStage] = useState<Stage>('wipe');
   const [result, setResult] = useState<CatchResult | null>(null);
-  const [stageLabel, setStageLabel] = useState('Isolating…');
+  const [wipeDone, setWipeDone] = useState(false);
   const filed = useRef(false);
+  const prevTheme = useRef('explore');
 
   useEffect(() => {
     logEvent('catch_attempt', job.mode);
-    const labels = ['Isolating…', 'Reducing…', 'Inking…'];
-    let i = 0;
-    const iv = setInterval(() => { i = Math.min(2, i + 1); setStageLabel(labels[i]); }, 260);
+    sfx.encounter(); music('encounter');
     const t0 = performance.now();
-    Promise.all([analyze(job.shot.rgba), job.paletteRgba ? analyze(job.paletteRgba, 512, [0.5, 0.5]) : Promise.resolve(null)]).then(([a0, plate]) => {
-      const a = plate ? { ...a0, palette: plate.palette } : a0;
-      clearInterval(iv);
-      const score = job.scoreOverride ? mergeScore(a.score, job.scoreOverride) : a.score;
-      const out = { ...a, score, timings: { ...a.timings, wall: performance.now() - t0 } };
+    analyze(job.shot.rgba).then((a) => {
+      const out = { ...a, timings: { ...a.timings, wall: performance.now() - t0 } };
       (window as any).__lastPipeline = out.timings;
       setAnalysis(out);
-      // freeze frame must be visible ≥120ms (CAM-5)
-      setTimeout(() => {
-        if (score.tooDark && job.mode !== 'window' && job.mode !== 'sketch') setStage('dark');
-        else if (job.knownSpecies) file(job.knownSpecies, 'verified', out);
-        else setStage('confirm');
-      }, 140);
     });
-    return () => clearInterval(iv);
+    return () => { music(prevTheme.current as 'explore'); };
   }, []);
+  useEffect(() => {
+    if (!wipeDone || !analysis) return;
+    setStage(analysis.score.tooDark && job.mode === 'field' ? 'dark' : 'spotted');
+  }, [wipeDone, analysis]);
 
-  const file = async (speciesId: string | null, verification: Verification, a = analysis!) => {
-    if (filed.current) return;
+  const file = async (speciesId: string | null, verification: Verification) => {
+    if (filed.current || !analysis) return;
     filed.current = true;
     const r = await fileCatch({
       speciesId, verification, mode: job.mode, habitat: getState().habitat,
-      analysis: { palette: a.palette, score: a.score, hash: a.hash }, photo: job.shot.blob, at: job.shot.takenAt,
+      analysis: { palette: analysis.palette, score: analysis.score, hash: analysis.hash }, photo: job.shot.blob, at: job.shot.takenAt,
     });
-    setResult(r);
-    setStage('reveal');
+    setResult(r); setStage('appear');
   };
 
+  const sc = analysis?.score;
+  const snapPower = sc?.total ?? 0;
   return (
-    <div className="overlay modal" style={{ background: 'var(--ink)' }}>
-      {stage !== 'reveal' && (
-        <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <div className="taped tilt-l mt16" style={{ width: '70%', maxWidth: 300 }}>
-            <img src={job.shot.preview} alt="Your capture" style={{ aspectRatio: '1/1', objectFit: 'cover', imageRendering: job.mode === 'window' || job.mode === 'sketch' ? 'pixelated' : 'auto' }} />
-          </div>
-          {!analysis && <p className="px" aria-live="polite">{stageLabel}</p>}
-          {analysis && job.mode !== 'sketch' && <ScoreStamp s={analysis.score} />}
-          {stage === 'dark' && (
-            <div className="panel" role="alert">
-              <h3 className="mb8">Too dark to read</h3>
-              <p className="small">We couldn't read that photo — it may be too dark. Try again with the bird against the sky.</p>
-              <button className="btn primary block mt8" onClick={nav.back}>Try again</button>
-              <button className="link" onClick={() => setStage('confirm')}>File it anyway</button>
-            </div>
-          )}
-        </div>
-      )}
-      {stage === 'confirm' && analysis && <ConfirmSheet job={job} onPick={(id, v) => file(id, v)} onCancel={nav.back} />}
-      {stage === 'reveal' && result && analysis && <Reveal job={job} result={result} analysis={analysis} />}
+    <div className="overlay modal" style={{ background: '#000' }}>
+      <BattleField job={job} habitat={habitat} region={region} stage={stage} result={result} analysis={analysis} snapPower={snapPower}
+        onThrown={() => setStage('caught')} />
+      <div style={{ padding: '14px 12px calc(14px + var(--safe-b))', background: '#0A0C0F', borderTop: '3px solid #000', maxHeight: '58%', overflowY: 'auto' }}>
+        {stage === 'wipe' && <Dialog lines={['…']} />}
+        {stage === 'dark' && (
+          <Dialog lines={['Hmm… the photo is too dark to see the bird.', 'Try again with the bird against the sky, or use it anyway.']}>
+            <div className="row mt8"><button className="btn primary grow" onClick={nav.back}>Try again</button><button className="btn grow" onClick={() => setStage('spotted')}>Use it</button></div>
+          </Dialog>
+        )}
+        {stage === 'spotted' && sc && (
+          <Dialog lines={[
+            job.mode === 'sketch' ? 'You sketched a wild bird!' : 'You spotted a wild bird!',
+            ...(job.mode === 'field' ? [`Snap Power ${snapPower}! ${sc.coaching[0] ?? ''}`] : job.mode === 'import' ? ['An archived photo — it counts, at half XP.'] : []),
+            'What bird is it?',
+          ]} onDone={() => setStage('identify')} />
+        )}
+        {(stage === 'identify' || stage === 'search') && (
+          <Identify job={job} search={stage === 'search'} onSearch={() => setStage('search')} onBack={() => setStage('identify')} onPick={file} />
+        )}
+        {stage === 'appear' && result && (
+          <>
+            <Dialog lines={[`A wild ${result.species.common.toUpperCase()} appeared!`]} />
+            <button className="btn primary big block mt8" onClick={() => { sfx.throw(); haptic(15); setStage('throw'); }}>
+              <Capsule size={24} /> Throw Snap Capsule
+            </button>
+          </>
+        )}
+        {stage === 'throw' && <Dialog lines={['…']} />}
+        {stage === 'caught' && result && <CaughtText result={result} onContinue={() => {
+          sfx.page();
+          nav.closeAll(); nav.setTab('dex'); nav.setHighlight(result.sighting.id);
+          setTimeout(() => nav.open({ name: 'species', id: result.sighting.speciesId ?? '_unknown', sightingId: result.sighting.id }), 50);
+        }} />}
+      </div>
+      {!wipeDone && <Wipe onDone={() => setWipeDone(true)} />}
     </div>
   );
 }
 
-function ScoreStamp({ s }: { s: FieldcraftScore }) {
-  return (
-    <div className="panel" style={{ width: '100%' }} aria-label={`Fieldcraft score ${s.total} of 100`}>
-      <div className="row between"><span className="label">Fieldcraft</span><span className="num" style={{ fontSize: 20, color: 'var(--accent)' }}>{s.total}</span></div>
-      <Meter value={s.total} tone="sun" label="Fieldcraft" />
-      {s.coaching.slice(0, 2).map((c) => <p key={c} className="small" style={{ margin: '6px 0 0' }}>“{c}”</p>)}
-    </div>
-  );
-}
-
-// ─── species confirm (CAM-2, CAM-3, CAM-9, COL-9) ───
-function ConfirmSheet({ job, onPick, onCancel }: { job: CaptureJob; onPick: (id: string | null, v: Verification) => void; onCancel: () => void }) {
+function Identify({ job, search, onSearch, onBack, onPick }: { job: CaptureJob; search: boolean; onSearch: () => void; onBack: () => void; onPick: (id: string | null, v: Verification) => void }) {
   const regionCode = useGame((s) => s.region);
   const habitat = useGame((s) => s.habitat);
-  const region = REGION_BY_CODE[regionCode];
+  const region = getRegion(regionCode);
   const shortlist = useMemo(() => likelyNow(region, job.shot.takenAt, habitat).slice(0, 5), []);
-  const [mode, setMode] = useState<'short' | 'search' | 'vagrant'>('short');
   const [q, setQ] = useState('');
-  const [vagrant, setVagrant] = useState<Species | null>(null);
-  const regional = regionSpecies(regionCode);
-  const pool = mode === 'vagrant' ? SPECIES.filter((s) => !s.occ[regionCode]) : regional;
-  const results = pool.filter((s) => !q || `${s.common} ${s.sci} ${s.familyName}`.toLowerCase().includes(q.toLowerCase())).sort((a, b) => a.common.localeCompare(b.common));
-
-  if (vagrant) {
+  const [vagrant, setVagrant] = useState(false);
+  type Opt = { kind: 'sp'; sp: Species; dex?: number } | { kind: 'search' } | { kind: 'later' };
+  if (!search) {
+    const opts: Opt[] = [...shortlist.map((l) => ({ kind: 'sp' as const, sp: l.sp, dex: l.dex })), { kind: 'search' }, { kind: 'later' }];
     return (
-      <Sheet onClose={() => setVagrant(null)} label="Report a vagrant">
-        <h3 className="mb8">Report a vagrant?</h3>
-        <p className="small">That species isn't recorded in {region.name}. File it as a vagrant?</p>
-        <p className="small muted">It will be filed and drawn, flagged for review, and won't count toward {region.name} completion until you confirm it from the journal.</p>
-        <div className="row mt16"><Sprite species={vagrant} mode="static" scale={2} /><b>{vagrant.common}</b></div>
-        <button className="btn primary block mt16" onClick={() => onPick(vagrant.id, 'vagrant')}>File as vagrant</button>
-        <button className="btn ghost block mt8" onClick={() => setVagrant(null)}>Back</button>
-      </Sheet>
+      <Menu label="What bird is it?" items={opts} onPick={(o) => (o.kind === 'sp' ? onPick(o.sp.id, 'verified') : o.kind === 'search' ? onSearch() : onPick(null, 'unverified'))}
+        render={(o) => o.kind === 'sp' ? (
+          <span className="row grow" style={{ gap: 10 }}><BirdThumb sp={o.sp} size={44} /><span className="grow">{o.sp.common}<br /><span className="sub"><Types sp={o.sp} /></span></span><span className="sub">{dexNo(o.dex)}</span></span>
+        ) : o.kind === 'search' ? <span>Search all {region.name} birds…</span> : <span>Not sure — identify later</span>} />
     );
   }
-
+  const entries = regionEntries(regionCode);
+  const inRegion = new Set(entries.map((e) => e.sp.id));
+  const pool = vagrant ? allKnownSpecies().filter((s) => !inRegion.has(s.id)) : entries.map((e) => e.sp);
+  const res = pool.filter((s) => !q || `${s.common} ${s.sci}`.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
   return (
-    <Sheet onClose={onCancel} label="What did you see?">
-      <h3 className="mb8">What did you see?</h3>
-      {mode === 'short' ? (
-        <>
-          <p className="small muted" style={{ marginTop: 0 }}>Most likely in {region.name} right now:</p>
-          <div role="list">
-            {shortlist.map(({ sp, rarity }) => (
-              <button key={sp.id} role="listitem" className="srow" onClick={() => { sfx.tap(); onPick(sp.id, 'verified'); }}>
-                <Sprite species={sp} mode="static" scale={2} />
-                <RefThumb sp={sp} />
-                <span className="grow"><span className="name">{displayName(sp, regionCode)}</span><br /><RarityTag rarity={rarity} /></span>
-              </button>
-            ))}
-          </div>
-          <button className="btn block mt16" onClick={() => setMode('search')}>Search all {region.name} birds</button>
-        </>
-      ) : (
-        <>
-          <input autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={mode === 'vagrant' ? 'Search species from other regions' : `Search ${regional.length} ${region.name} species`}
-            aria-label="Search species" style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: 'var(--ink)', border: '2px solid var(--smoke)' }} />
-          <div style={{ maxHeight: '42vh', overflowY: 'auto', marginTop: 8 }}>
-            {results.map((sp) => (
-              <button key={sp.id} className="srow" onClick={() => (mode === 'vagrant' ? setVagrant(sp) : onPick(sp.id, 'self-reported'))}>
-                <Sprite species={sp} mode="static" scale={1} />
-                <span className="grow"><span className="name">{displayName(sp, regionCode)}</span><br /><span className="sci">{sp.sci}</span></span>
-              </button>
-            ))}
-            {!results.length && <p className="small muted">Nothing matches. Loosen the search?</p>}
-          </div>
-          {mode === 'search' ? (
-            <button className="link" onClick={() => { setMode('vagrant'); setQ(''); }}>Not on this list? Report a vagrant</button>
-          ) : (
-            <button className="link" onClick={() => { setMode('search'); setQ(''); }}>Back to {region.name} species</button>
-          )}
-        </>
-      )}
-      <button className="btn ghost block mt8" onClick={() => onPick(null, 'unverified')}>Not sure — identify later</button>
-      <p className="small muted">Unidentified catches still become sprites. They don't count toward completion until you name them.</p>
-    </Sheet>
+    <div className="menu" style={{ padding: 10 }}>
+      <input autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={vagrant ? 'Birds from other regions…' : `Search ${entries.length} ${region.name} birds…`}
+        aria-label="Search species" style={{ width: '100%', minHeight: 44, padding: '6px 10px', background: '#fff', color: '#000', border: '2px solid #000', fontSize: 16 }} />
+      <div style={{ maxHeight: '30vh', overflowY: 'auto' }}>
+        {res.map((s) => (
+          <button key={s.id} className="menu-item" onClick={() => { sfx.select(); onPick(s.id, vagrant ? 'vagrant' : 'self-reported'); }}>
+            <BirdThumb sp={s} size={36} /><span className="grow">{s.common}<br /><span className="sub"><i>{s.sci}</i></span></span>
+          </button>
+        ))}
+        {!res.length && <p className="sub">No match. {vagrant ? '' : 'Not on this list? Try “report a vagrant”.'}</p>}
+      </div>
+      <div className="row between" style={{ marginTop: 6 }}>
+        <button className="menu-item" style={{ width: 'auto', minHeight: 40 }} onClick={() => { sfx.back(); onBack(); }}>◀ Back</button>
+        <button className="menu-item" style={{ width: 'auto', minHeight: 40 }} onClick={() => { setVagrant(!vagrant); setQ(''); }}>{vagrant ? 'Local birds' : 'Report a vagrant'}</button>
+      </div>
+      {vagrant && <p className="sub" style={{ margin: '4px 0 0' }}>Vagrants are birds far outside their usual range. They are drawn and saved, but count once you confirm them.</p>}
+    </div>
   );
 }
 
-// ─── reveal (the product) ───
+function CaughtText({ result, onContinue }: { result: CatchResult; onContinue: () => void }) {
+  const s = result.sighting, sp = result.species;
+  const lines = [
+    s.speciesId ? `Caught! ${sp.common.toUpperCase()} was registered in the BirdDex${s.dex ? ` as ${dexNo(s.dex)}` : ''}.` : 'Caught! An unidentified bird joined your BirdDex. Name it later.',
+    ...(s.firstRecord ? ['★ NEW ENTRY! You have never caught this bird before.'] : s.newPlumage ? ['A new plumage! This one looks different from your others.'] : [`You have caught this species ${s.timesSeen} times.`]),
+    `${sp.common} is Lv ${s.level ?? 5}. You gained ${s.xp} XP and ${s.feathers} Feathers — spend them on food for your feeder.`,
+    ...(getState().diorama.birds.includes(s.id) ? [getState().sightings.length === 1 ? 'Your new bird lives in the Aviary now. Keep the feeder filled and it will stay healthy!' : `${sp.common} moved into your Aviary.`] : [`Your Aviary is full, so ${sp.common} is resting in the Bird Box.`]),
+    ...(s.sprite.variant !== 'normal' ? [`Incredible — a rare ${s.sprite.variant} bird!`] : []),
+    ...(result.badges.length === 1 ? [`You earned the ${result.badges[0].name.toUpperCase()} badge!`]
+      : result.badges.length > 1 ? [`You earned ${result.badges.length} badges: ${result.badges.map((b) => b.name).join(', ')}!`] : []),
+    ...(result.rankUp ? [`Trainer level up! ${RANK_LINES[result.rankUp] ?? result.rankUp}`] : []),
+  ];
+  useEffect(() => { if (result.rankUp || result.badges.length) setTimeout(sfx.levelUp, 1600); }, []);
+  return (
+    <>
+      {result.badges.length > 0 && (
+        <div className="row" style={{ gap: 10, justifyContent: 'center', marginBottom: 10 }}>
+          {result.badges.map((b) => <span key={b.id} style={{ animation: 'stampin 400ms steps(4)' }}><BadgeIcon icon={b.icon} earned size={56} label={`${b.name} badge`} /></span>)}
+        </div>
+      )}
+      <Dialog lines={lines}>
+        <button className="btn primary block mt8" onClick={(e) => { e.stopPropagation(); onContinue(); }}>Continue</button>
+      </Dialog>
+    </>
+  );
+}
+
+// ─── the field: scene, photo, sprite reveal, capsule ───
 function seededOrder(n: number, seed: number): number[] {
   const a = Array.from({ length: n }, (_, i) => i);
   let s = seed || 1;
@@ -182,166 +179,164 @@ function seededOrder(n: number, seed: number): number[] {
   return a;
 }
 
-function Reveal({ job, result, analysis }: { job: CaptureJob; result: CatchResult; analysis: Analysis }) {
-  const nav = useNav();
+function BattleField({ job, habitat, region, stage, result, analysis, snapPower, onThrown }: {
+  job: CaptureJob; habitat: any; region: ReturnType<typeof getRegion>; stage: Stage; result: CatchResult | null; analysis: Analysis | null; snapPower: number; onThrown: () => void;
+}) {
   const reduced = useReducedMotion();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [done, setDone] = useState(false);
-  const [xpShown, setXpShown] = useState(0);
-  const skip = useRef(false);
-  const { sighting: s, species: sp } = result;
-  const region = useGame((st) => REGION_BY_CODE[st.region]);
-  const total = useGame((st) => speciesCount(st));
-  const bgHex = HEX[s.sprite.bg];
-  const frames = renderFrames(sp, s.sprite.parts);
-
+  const sceneRef = useRef<HTMLCanvasElement>(null);
+  const revealRef = useRef<HTMLCanvasElement>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [throwPhase, setThrowPhase] = useState<'none' | 'fly' | 'open' | 'drop' | 'wobble' | 'done'>('none');
+  const [wob, setWob] = useState(0);
   useEffect(() => {
-    const c = canvasRef.current!; const g = c.getContext('2d')!;
-    g.imageSmoothingEnabled = false;
-    const img = new Image();
-    img.src = job.shot.preview;
-    let raf = 0; let start = 0;
-    // crop square around the subject so the mosaic lines up with where the bird was
-    const bb = analysis.bbox;
-    const side = Math.min(1, Math.max(bb.w, bb.h) * 1.35);
+    const now = new Date();
+    paintSceneThumb(sceneRef.current!, habitat, dayPhase(now, sunTimes(now, region.lat, region.lng)), 200, 260);
+  }, []);
+
+  // photo → sprite reveal (the "appeared" moment)
+  useEffect(() => {
+    if (stage !== 'appear' || !result || !analysis) return;
+    const s = result.sighting;
+    const frames = renderFrames(result.species, s.sprite.parts);
+    const c = revealRef.current; if (!c) return;
+    const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
+    const img = new Image(); img.src = job.shot.preview;
+    const bb = analysis.bbox, side = Math.min(1, Math.max(bb.w, bb.h) * 1.35);
     const cx = Math.min(1 - side / 2, Math.max(side / 2, bb.x + bb.w / 2)), cy = Math.min(1 - side / 2, Math.max(side / 2, bb.y + bb.h / 2));
     const small = document.createElement('canvas');
-    const mosaicAt = (n: number) => {
-      small.width = n; small.height = n;
-      const sg = small.getContext('2d')!; sg.imageSmoothingEnabled = true;
-      sg.drawImage(img, (cx - side / 2) * img.naturalWidth, (cy - side / 2) * img.naturalHeight, side * img.naturalWidth, side * img.naturalHeight, 0, 0, n, n);
-      return sg.getImageData(0, 0, n, n);
-    };
+    const mosaic = (n: number) => { small.width = n; small.height = n; const sg = small.getContext('2d')!; sg.drawImage(img, (cx - side / 2) * img.naturalWidth, (cy - side / 2) * img.naturalHeight, side * img.naturalWidth, side * img.naturalHeight, 0, 0, n, n); return sg.getImageData(0, 0, n, n); };
     const order = seededOrder(1024, parseInt(s.sprite.hash.slice(0, 6), 16));
-    let snapped: number[] | null = null;
-    const finalFrame = frames[0];
+    let snapped: number[] | null = null; let raf = 0; let start = 0; let tick = 0;
     const paintIdx = (arr: ArrayLike<number>) => {
       const id = g.createImageData(32, 32);
-      for (let i = 0; i < 1024; i++) { const c = RGB[arr[i]]; id.data.set([c[0], c[1], c[2], 255], i * 4); }
-      g.putImageData(id, 0, 0);
+      for (let i = 0; i < 1024; i++) { if (arr[i] === CLEAR) continue; const col = RGB[arr[i]]; id.data.set([col[0], col[1], col[2], 255], i * 4); }
+      g.clearRect(0, 0, 32, 32); g.putImageData(id, 0, 0);
     };
-    const end = () => {
-      g.clearRect(0, 0, 32, 32); g.fillStyle = bgHex; g.fillRect(0, 0, 32, 32);
-      setDone(true); haptic([12, 40, 18]);
-      if (s.firstRecord) sfx.stamp(); sfx.sparkle();
-      if (result.rankUp) setTimeout(sfx.fanfare, 400);
-    };
-    let lastTick = 0;
     const step = (t: number) => {
       if (!start) start = t;
       const e = t - start;
-      if (skip.current || e > 1800) { end(); return; }
-      if (e < 450) {
-        const n = e < 150 ? 128 : e < 300 ? 64 : 32;
-        const d = mosaicAt(n);
-        const tmp = document.createElement('canvas'); tmp.width = n; tmp.height = n; tmp.getContext('2d')!.putImageData(d, 0, 0);
-        g.drawImage(tmp, 0, 0, 32, 32);
-      } else if (e < 1100) {
-        if (!snapped) {
-          const d = mosaicAt(32);
-          snapped = [];
-          for (let i = 0; i < 1024; i++) snapped.push(snapToPalette(rgbToLab(d.data[i * 4], d.data[i * 4 + 1], d.data[i * 4 + 2]), [IDX.eye]));
-        }
-        const k = Math.min(1, (e - 450) / 600);
-        const arr = snapped.slice();
-        const upto = Math.floor(k * 1024);
-        for (let j = 0; j < upto; j++) { const i = order[j]; arr[i] = finalFrame[i] === CLEAR ? s.sprite.bg : finalFrame[i]; }
+      if (e > 1500) { setRevealed(true); haptic([12, 40, 18]); sfx.sparkle(); return; }
+      if (e < 420) { const n = e < 140 ? 128 : e < 280 ? 64 : 32; const d = mosaic(n); const tmp = document.createElement('canvas'); tmp.width = n; tmp.height = n; tmp.getContext('2d')!.putImageData(d, 0, 0); g.clearRect(0, 0, 32, 32); g.drawImage(tmp, 0, 0, 32, 32); }
+      else {
+        if (!snapped) { const d = mosaic(32); snapped = []; for (let i = 0; i < 1024; i++) snapped.push(snapToPalette(rgbToLab(d.data[i * 4], d.data[i * 4 + 1], d.data[i * 4 + 2]), [IDX.eye])); }
+        const k = Math.min(1, (e - 420) / 900); const arr = snapped.slice(); const upto = Math.floor(k * 1024);
+        for (let j = 0; j < upto; j++) { const i = order[j]; arr[i] = frames[0][i]; }
         paintIdx(arr);
-        if (t - lastTick > 50) { sfx.pixel(); lastTick = t; }
-      } else {
-        // land: 2px drop and settle, stepped
-        const k = (e - 1100) / 700;
-        const dy = k < 0.2 ? -3 : k < 0.4 ? -1 : k < 0.5 ? 1 : 0;
-        const arr = new Array(1024).fill(s.sprite.bg);
-        for (let i = 0; i < 1024; i++) {
-          const y = (i / 32) | 0, x = i % 32, sy = y - dy;
-          if (sy >= 0 && sy < 32 && finalFrame[sy * 32 + x] !== CLEAR) arr[i] = finalFrame[sy * 32 + x];
-        }
-        paintIdx(arr);
+        if (t - tick > 55) { sfx.pixel(); tick = t; }
       }
       raf = requestAnimationFrame(step);
     };
-    const go = () => {
-      if (reduced) { setTimeout(end, 200); return; }
-      raf = requestAnimationFrame(step);
-    };
-    if (img.complete) go(); else img.onload = go;
-    img.onerror = () => end();
+    const go = () => { if (reduced) { setRevealed(true); return; } raf = requestAnimationFrame(step); };
+    if (img.complete) go(); else { img.onload = go; img.onerror = () => setRevealed(true); }
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [stage]);
 
+  // capsule throw → open → suck in → drop → wobble ×N → click
   useEffect(() => {
-    if (!done) return;
-    let v = 0;
-    const iv = setInterval(() => { v = Math.min(s.xp, v + Math.max(1, Math.ceil(s.xp / 8))); setXpShown(v); if (v >= s.xp) clearInterval(iv); }, 60);
-    return () => clearInterval(iv);
-  }, [done]);
+    if (stage !== 'throw' || !result) return;
+    const n = result.sighting.firstRecord ? 3 : Math.max(1, Math.min(3, Math.round(snapPower / 35)));
+    const [tFly, tOpen, tDrop, tWob] = reduced ? [1, 1, 1, 1] : [650, 420, 380, 700];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    setThrowPhase('fly');
+    timers.push(setTimeout(() => { setThrowPhase('open'); sfx.open(); }, tFly));
+    timers.push(setTimeout(() => { setThrowPhase('drop'); sfx.stamp(); }, tFly + tOpen));
+    const w0 = tFly + tOpen + tDrop;
+    timers.push(setTimeout(() => setThrowPhase('wobble'), w0));
+    for (let i = 0; i < n; i++) timers.push(setTimeout(() => { setWob(i + 1); sfx.wobble(); haptic(8); }, w0 + i * tWob));
+    timers.push(setTimeout(() => { setThrowPhase('done'); sfx.click(); haptic([20, 30, 40]); setTimeout(() => sfx.caught(), 250); onThrown(); }, w0 + n * tWob));
+    return () => timers.forEach(clearTimeout);
+  }, [stage]);
 
-  const fileIt = () => {
-    sfx.page();
-    if (job.returnTo === 'window') { nav.back(); nav.toast(`Filed: ${displayName(sp, s.region)} · +${s.xp} XP`); return; }
-    nav.closeAll(); nav.setTab('journal'); nav.setHighlight(s.id);
-  };
+  const s = result?.sighting; const sp = result?.species;
+  const birdVisible = (stage === 'appear' || (stage === 'throw' && (throwPhase === 'fly'))) && !!s;
+  const capsuleOnField = stage === 'throw' && (throwPhase === 'drop' || throwPhase === 'wobble' || throwPhase === 'done') || stage === 'caught';
+  const showPhoto = stage === 'wipe' || stage === 'spotted' || stage === 'dark' || stage === 'identify' || stage === 'search';
 
-  const rm = RARITY_META[s.rarity];
-  const fcLine = s.coaching[0];
   return (
-    <div className="screen" style={{ textAlign: 'center' }}>
-      <div className="panel" style={{ padding: 8, position: 'relative' }} onClick={() => (skip.current = true)}>
-        <div className="label" style={{ textAlign: 'left' }}>Photo → Sprite</div>
-        <div style={{ position: 'relative', width: 256, height: 256, margin: '8px auto' }}>
-          {!done ? (
-            <canvas ref={canvasRef} width={32} height={32} className="pix" style={{ width: 256, height: 256, transition: reduced ? 'opacity 200ms' : undefined }} aria-label="Your photo turning into a sprite. Tap to skip." />
-          ) : (
-            <div style={{ background: bgHex, width: 256, height: 256 }}>
-              <Sprite species={sp} parts={s.sprite.parts} scale={8} mode={s.sprite.pose === 'flight' ? 'fly' : 'idle'} label={`${sp.common} sprite`} />
-            </div>
-          )}
-          {done && s.firstRecord && <span className="stampmark sun" style={{ position: 'absolute', top: 8, right: -4, background: 'var(--ink)', animation: 'stampin 300ms steps(3)' }}>★ First record</span>}
-          {done && !s.firstRecord && s.timesSeen % 10 === 0 && <span className="stampmark ash" style={{ position: 'absolute', top: 8, right: 0, background: 'var(--ink)' }}>{s.timesSeen}×</span>}
-          {done && s.sprite.variant !== 'normal' && <span className="stampmark rust" style={{ position: 'absolute', bottom: 8, left: 0, background: 'var(--ink)' }}>{s.sprite.variant}</span>}
-        </div>
-        <div className="small muted" style={{ textAlign: 'right' }}>{done ? '32 × 32' : 'tap to skip'}</div>
+    <div className="field">
+      <canvas ref={sceneRef} className="scene" aria-hidden />
+      {/* enemy-side info box */}
+      <div className="hpbox" style={{ left: 12, top: 'calc(12px + var(--safe-t))' }}>
+        <div className="row between"><span className="nm">{sp && stage !== 'identify' ? sp.common : 'Wild bird'}</span><span className="nm">{s ? `Lv${s.level ?? 5}` : 'Lv?'}</span></div>
+        {sp && stage !== 'identify' && stage !== 'search' && <div style={{ marginTop: 2 }}><Types sp={sp} /></div>}
+        <div className="row between" style={{ fontSize: 10, fontFamily: 'var(--px)', marginTop: 4 }}><span>SNAP</span><span>{job.mode === 'field' ? snapPower : '—'}</span></div>
+        <div className="hpbar"><i style={{ width: `${job.mode === 'field' ? snapPower : 50}%`, background: snapPower > 70 ? '#6FA84B' : snapPower > 40 ? '#E8A33D' : '#A8452F' }} /></div>
       </div>
-
-      {done && (
-        <div style={{ animation: 'fadein 180ms steps(3)' }}>
-          <h2 style={{ fontSize: 18 }}>{displayName(sp, s.region)}</h2>
-          {sp.sci && <div className="sci">{sp.sci}</div>}
-          <div className="row mt8" style={{ justifyContent: 'center', gap: 12 }}>
-            <RarityTag rarity={s.rarity} />
-            <span className={`stampmark ${VERIFY_META[s.verification].cls}`}>{VERIFY_META[s.verification].label}</span>
-            {s.mode !== 'field' && <span className="stampmark ash">{s.mode === 'import' ? 'Archived' : s.mode === 'sketch' ? 'Sketch' : 'Window'}</span>}
+      {/* the bird's platform */}
+      <div className="platform" style={{ right: '8%', top: '58%' }} />
+      {showPhoto && (
+        <>
+          {/* the wild bird, seen through the game: your photo reduced to 32×32 in the game palette */}
+          <div style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)' }}><PixelPhoto src={job.shot.preview} bbox={analysis?.bbox} /></div>
+          <div className="taped" style={{ position: 'absolute', left: 14, top: 'calc(96px + var(--safe-t))', width: 84, transform: 'rotate(-3deg)', padding: '4px 4px 10px' }}>
+            <img src={job.shot.preview} alt="Your photo" style={{ aspectRatio: '1/1', objectFit: 'cover' }} />
           </div>
-          {s.rarity === 'common' && <p className="small muted" style={{ marginBottom: 0 }}>The bird that taught you the shape of a wing.</p>}
-          {s.rarity === 'legendary' && <p className="small" style={{ color: 'var(--accent)' }}>Most birders wait decades. You were standing in the right place.</p>}
-          <p className="small" style={{ fontStyle: 'italic' }}>“{sp.fact}”</p>
-          {s.fieldcraft && (
-            <div className="mt8">
-              <Meter value={s.fieldcraft.total} tone="seg" label="Fieldcraft" />
-              <p className="small muted" style={{ margin: '6px 0 0' }}>Fieldcraft {s.fieldcraft.total} · “{fcLine}”</p>
-            </div>
-          )}
-          <div className="panel mt16" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: 0 }}>
-            <div style={{ padding: 10 }}><div className="num" style={{ color: 'var(--accent)', fontSize: 18 }}>+{xpShown}</div><div className="label" style={{ fontSize: 11 }}>XP</div></div>
-            <div style={{ padding: 10, borderLeft: '2px solid var(--slate)', borderRight: '2px solid var(--slate)' }}><div className="num" style={{ fontSize: 18 }}>{total}</div><div className="label" style={{ fontSize: 11 }}>Species</div></div>
-            <div style={{ padding: 10 }}><div className="num" style={{ fontSize: 18 }}>+{s.feathers}</div><div className="label" style={{ fontSize: 11 }}>Feathers</div></div>
-          </div>
-          {s.newPlumage && <p className="small" style={{ color: 'var(--lichen)' }}>New plumage record. Your {sp.common.toLowerCase()} looks different this time.</p>}
-          {!s.firstRecord && !s.newPlumage && s.speciesId && <p className="small muted">Seen {s.timesSeen} times. +{s.feathers} Feathers.</p>}
-          {result.badges.map((b) => (
-            <div key={b.id} className="panel flat row between" style={{ padding: '8px 12px' }}>
-              <span className="small">{b.name} · {b.tier}</span><span className="px small" style={{ color: 'var(--accent)' }}>Earned</span>
-            </div>
-          ))}
-          {result.rankUp && <p className="px small" style={{ color: 'var(--accent)' }}>{RANK_LINES[result.rankUp] ?? result.rankUp}</p>}
-          {sp.sensitive && <p className="small muted">Sensitive species — location hidden. PIXEL BIRDER never stores where you saw it.</p>}
-          <button className="btn cream big block mt16" onClick={fileIt}>File in journal</button>
-          {job.returnTo !== 'window' && <button className="link" onClick={() => { nav.closeAll(); nav.open({ name: 'species', id: s.speciesId ?? '_unknown', sightingId: s.id }); }}>Open species card</button>}
+        </>
+      )}
+      {stage === 'appear' && !revealed && <canvas ref={revealRef} width={32} height={32} className="pix" style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)', width: 128, height: 128 }} aria-label="Your photo turning into a sprite" />}
+      {birdVisible && revealed && sp && s && (
+        <div className={stage === 'throw' && throwPhase === 'fly' ? '' : ''} style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)' }}>
+          <Sprite species={sp} parts={s.sprite.parts} scale={4} mode="idle" flip label={`${sp.common} sprite`} />
         </div>
       )}
+      {stage === 'throw' && throwPhase === 'open' && sp && s && (
+        <div className="suck" style={{ position: 'absolute', right: 'calc(8% + 31px)', top: 'calc(58% - 112px)' }}><Sprite species={sp} parts={s.sprite.parts} scale={4} mode="static" flip /></div>
+      )}
+      {stage === 'throw' && throwPhase === 'fly' && (
+        <div className="throw" style={{ ['--tx' as any]: 'calc(92% - 95px)', ['--ty' as any]: 'calc(58% - 80px)' }}><Capsule size={44} /></div>
+      )}
+      {stage === 'throw' && throwPhase === 'open' && <div className="flash-white" />}
+      {capsuleOnField && (
+        <div className="capsule-sit" style={{ right: 'calc(8% + 78px)', top: 'calc(58% - 34px)' }}>
+          <div key={wob} className={throwPhase === 'wobble' && wob > 0 ? 'wobble' : ''} style={{ transformOrigin: '50% 100%' }}><Capsule size={44} glow={throwPhase === 'done' || stage === 'caught'} /></div>
+        </div>
+      )}
+      {throwPhase === 'done' && <div style={{ position: 'absolute', right: 'calc(8% + 62px)', top: 'calc(58% - 110px)', zIndex: 7 }}><FxHit size={120} /></div>}
+      {(throwPhase === 'done' || stage === 'caught') && (
+        <div className="burst" style={{ right: 'calc(8% + 95px)', top: 'calc(58% - 20px)', left: 'auto' }}>
+          {[[-50, -40], [50, -40], [-60, 10], [60, 10], [0, -60], [-30, 40], [30, 40], [0, 50]].map(([x, y], i) => <i key={i} style={{ ['--bx' as any]: `${x}px`, ['--by' as any]: `${y}px` }} />)}
+        </div>
+      )}
+      {/* trainer side: partner peeks in from bottom-left */}
+      <PartnerCorner />
+      {stage === 'caught' && s?.firstRecord && <span className="stampmark sun" style={{ position: 'absolute', left: 16, top: '44%', background: '#000' }}>★ New BirdDex entry</span>}
+      {s && stage === 'caught' && <div style={{ position: 'absolute', right: 12, bottom: 10, background: HEX[s.sprite.bg], border: '2px solid #000' }}><Sprite species={sp!} parts={s.sprite.parts} scale={2} /></div>}
     </div>
   );
 }
 
-export { Icon, SPECIES_BY_ID };
+/** Your photo cropped to the bird and quantised to FIELD 32 at 32×32, so the encounter already looks pixel. */
+function PixelPhoto({ src, bbox }: { src: string; bbox?: Analysis['bbox'] }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const img = new Image(); img.src = src;
+    img.onload = () => {
+      const c = ref.current; if (!c) return;
+      const bb = bbox ?? { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+      const side = Math.min(1, Math.max(bb.w, bb.h) * 1.35);
+      const cx = Math.min(1 - side / 2, Math.max(side / 2, bb.x + bb.w / 2)), cy = Math.min(1 - side / 2, Math.max(side / 2, bb.y + bb.h / 2));
+      const t = document.createElement('canvas'); t.width = 32; t.height = 32;
+      const tg = t.getContext('2d', { willReadFrequently: true })!;
+      tg.drawImage(img, (cx - side / 2) * img.naturalWidth, (cy - side / 2) * img.naturalHeight, side * img.naturalWidth, side * img.naturalHeight, 0, 0, 32, 32);
+      const d = tg.getImageData(0, 0, 32, 32);
+      for (let i = 0; i < 1024; i++) {
+        const k = snapToPalette(rgbToLab(d.data[i * 4], d.data[i * 4 + 1], d.data[i * 4 + 2]), [IDX.eye]);
+        const [r, g, b] = RGB[k]; d.data[i * 4] = r; d.data[i * 4 + 1] = g; d.data[i * 4 + 2] = b; d.data[i * 4 + 3] = 255;
+      }
+      c.getContext('2d')!.putImageData(d, 0, 0);
+    };
+  }, [src, bbox?.x]);
+  return <canvas ref={ref} width={32} height={32} className="pix" style={{ width: 128, height: 128, border: '3px solid #000', boxShadow: '4px 4px 0 #000' }} aria-label="The wild bird, pixelated from your photo" />;
+}
+
+function PartnerCorner() {
+  const partner = useGame((s) => s.partner);
+  const sp = partner ? allKnownSpecies().find((x) => x.id === partner.speciesId) : null;
+  if (!partner || !sp) return null;
+  return (
+    <div style={{ position: 'absolute', left: 14, bottom: 8 }}>
+      <div className="platform" style={{ position: 'absolute', left: -30, bottom: -8, width: 160 }} />
+      <Sprite species={sp} parts={partner.parts} scale={3} label={`Your partner, ${sp.common}`} />
+    </div>
+  );
+}

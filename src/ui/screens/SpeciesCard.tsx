@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, plumagesOf, deletePhotoKeepSprite, toggleHabitatBird, identifySighting, deleteSighting, counts } from '../../app/store';
-import { SPECIES_BY_ID, displayName, SPECIES } from '../../data/species';
-import { REGION_BY_CODE } from '../../data/regions';
+import { speciesById, allKnownSpecies, regionEntries } from '../../data/provider';
+import { getRegion, regionLabel } from '../../data/geo';
+import { Types, BirdThumb, dexNo, HpBar } from '../game';
+import { hpNow, mood, MOOD_LINE } from '../../core/pets';
 import { UNKNOWN } from '../../core/model';
 import { lns, rarityOf, regionSpecies } from '../../core/rarity';
 import { photoURL } from '../../app/db';
@@ -14,7 +16,7 @@ const HAB_LABEL: Record<string, string> = { urban: 'Urban & suburban', woodland:
 export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: string }) {
   const nav = useNav();
   const st = useGame((s) => s);
-  const sp = SPECIES_BY_ID[id] ?? UNKNOWN;
+  const sp = speciesById(id) ?? UNKNOWN;
   const mine = st.sightings.filter((x) => (id === '_unknown' ? x.id === sightingId : x.speciesId === id));
   const plumages = id === '_unknown' ? mine : plumagesOf(st, id);
   const [sel, setSel] = useState<string | undefined>(sightingId ?? plumages[0]?.id ?? mine[0]?.id);
@@ -24,20 +26,30 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { let live = true; photoURL(cur?.photoId ?? null).then((u) => live && setPhoto(u)); return () => { live = false; }; }, [cur?.photoId]);
 
-  const region = REGION_BY_CODE[st.region];
-  const rarity = sp.occ[st.region] ? rarityOf(lns(sp, region, new Date(), st.habitat)) : null;
+  const region = getRegion(st.region);
+  const entry = regionEntries(st.region).find((e) => e.sp.id === sp.id);
+  const rarity = entry ? rarityOf(lns(sp, region, new Date(), st.habitat)) : null;
   const regionsSeen = Object.keys(sp.occ);
   const inHab = cur ? st.diorama.birds.includes(cur.id) : false;
 
   return (
     <div className="overlay">
-      <TopBar title={cur ? displayName(sp, cur.region) : displayName(sp, st.region)} onBack={nav.back}
+      <TopBar title={`${dexNo(entry?.dex ?? cur?.dex)} ${mine.length || sp.id === '_unknown' ? sp.common : sp.common}`} onBack={nav.back}
         right={cur && <button className="icon-btn" aria-label="Open journal spread" onClick={() => nav.open({ name: 'spread', sightingId: cur.id })}><Icon name="journal" size={20} /></button>} />
       <div className="screen">
         <div style={{ background: cur ? HEX[cur.sprite.bg] : 'var(--plum)', border: '2px solid var(--ink)', boxShadow: '4px 4px 0 #000', display: 'flex', justifyContent: 'center', padding: 8 }}>
           {cur ? <Sprite species={sp} parts={cur.sprite.parts} scale={6} mode={cur.sprite.pose === 'flight' ? 'fly' : 'idle'} />
             : <Sprite species={sp} scale={6} mode="silhouette" label={`${sp.common} silhouette — not yet seen`} />}
         </div>
+        {cur && (
+          <div className="panel mt8" style={{ padding: 10 }}>
+            <HpBar hp={hpNow(cur)} />
+            <div className="row between mt8">
+              <span className="small" style={{ color: hpNow(cur) < 30 ? 'var(--oriole)' : 'var(--stone)' }}>{MOOD_LINE[mood(hpNow(cur))]}</span>
+              <span className="small muted">{st.diorama.birds.includes(cur.id) ? 'Lives in your Aviary · eats from the feeder' : 'Resting in the Bird Box'}</span>
+            </div>
+          </div>
+        )}
         {plumages.length > 1 && (
           <div className="row mt8" role="radiogroup" aria-label="Plumage records">
             <span className="label">Plumages</span>
@@ -63,20 +75,22 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
         {cur && (
           <div className="row mt16" style={{ alignItems: 'flex-start', gap: 16 }}>
             {photo ? (
-              <div className="taped tilt-l" style={{ width: 132, flex: 'none' }}><img src={photo} alt={`Your photo, ${formatDate(cur.capturedAt)}`} style={{ aspectRatio: '1/1', objectFit: 'cover', imageRendering: cur.mode === 'window' || cur.mode === 'sketch' ? 'pixelated' : 'auto' }} /></div>
+              <div className="taped tilt-l" style={{ width: 132, flex: 'none' }}><img src={photo} alt={`Your photo, ${formatDate(cur.capturedAt)}`} style={{ aspectRatio: '1/1', objectFit: 'cover', imageRendering: cur.mode === 'sketch' ? 'pixelated' : 'auto' }} /></div>
             ) : (
               <div className="taped tilt-l" style={{ width: 132, flex: 'none', background: 'var(--paper)' }}><div style={{ aspectRatio: '1/1', display: 'grid', placeItems: 'center', color: 'var(--smoke)', fontSize: 12, textAlign: 'center' }}>Photo removed.<br />Sprite kept.</div></div>
             )}
             <div className="small">
               <div className="px">{formatDate(cur.capturedAt, { day: 'numeric', month: 'short' })} · {cur.region}</div>
-              <div className="muted">{cur.mode === 'field' ? 'Field photo' : cur.mode === 'window' ? 'Window Mode' : cur.mode === 'import' ? 'Archived import' : 'Sketch'}</div>
+              <div className="muted">{cur.mode === 'field' ? 'Field photo' : cur.mode === 'import' ? 'Archived import' : 'Sketch'}{cur.level ? ` · Lv ${cur.level}` : ''}</div>
               {cur.fieldcraft && <div className="mt8">Fieldcraft {cur.fieldcraft.total}<Meter value={cur.fieldcraft.total} tone="sun" label="Fieldcraft" /></div>}
               {cur.coaching[0] && <div className="muted mt8">“{cur.coaching[0]}”</div>}
             </div>
           </div>
         )}
 
-        <p style={{ fontStyle: 'italic' }} className="mt16">“{sp.fact}”</p>
+        <div className="row mt16" style={{ gap: 8 }}><Types sp={sp} />{sp.sensitive && <span className="chip">Sensitive</span>}</div>
+        {sp.fact ? <p style={{ fontStyle: 'italic' }} className="mt8">“{sp.fact}”</p>
+          : sp.summary ? <p className="small mt8">{sp.summary}… <span className="muted">— Wikipedia, via iNaturalist</span></p> : null}
 
         {(cur?.verification === 'unverified' || cur?.verification === 'vagrant') && (
           <div className="panel">
@@ -105,9 +119,10 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
 
         {sp.id !== '_unknown' && (
           <section className="mt16">
-            <div className="label mb8">Seed regions</div>
+            <div className="label mb8">{regionsSeen.length ? 'Also curated for' : 'Range'}</div>
+            {!regionsSeen.length && <p className="small muted" style={{ marginTop: 0 }}>{entry ? `Recorded in ${regionLabel(st.region)}${entry.count ? ` — ${entry.count.toLocaleString()} research-grade records` : ''}.` : `Not on the ${region.name} list.`}</p>}
             <div className="row wrap">{regionsSeen.map((r) => <span key={r} className="chip" style={{ background: r === st.region ? 'var(--fern)' : undefined }}>{r}</span>)}</div>
-            {sp.sensitive && <p className="small muted">Sensitive — location hidden. Owl and raptor sightings are never pinned, and PIXEL BIRDER stores no coordinates at all.</p>}
+            {sp.sensitive && <p className="small muted">Sensitive — location hidden. Owl and raptor sightings are never pinned, and BirdlyQuest stores no coordinates at all.</p>}
           </section>
         )}
 
@@ -128,7 +143,7 @@ export function SpeciesCard({ id, sightingId }: { id: string; sightingId?: strin
           <div className="col mt24">
             <div className="row">
               <button className="btn grow" onClick={() => nav.open({ name: 'spread', sightingId: cur.id })}><Icon name="share" size={16} /> Spread & share</button>
-              {counts(cur) && <button className="btn grow" onClick={() => { if (!toggleHabitatBird(cur.id)) nav.toast('Your habitat holds 12 birds. Move one out first.'); }}>{inHab ? 'In habitat ✓' : 'Add to habitat'}</button>}
+              {counts(cur) && <button className="btn grow" onClick={() => { if (!toggleHabitatBird(cur.id)) nav.toast('The Aviary holds 12 birds. Move one to the Bird Box first.'); }}>{inHab ? 'Move to Bird Box' : 'Move to Aviary'}</button>}
             </div>
             {cur.photoId && <button className="link" onClick={() => deletePhotoKeepSprite(cur.id)}>Delete my photo, keep my sprite</button>}
             <button className="link" style={{ color: 'var(--oriole)' }} onClick={() => setConfirmDelete(true)}>Remove this sighting</button>
@@ -152,6 +167,7 @@ function IdentifySheet({ onClose, onPick }: { onClose: () => void; onPick: (id: 
   const region = useGame((s) => s.region);
   const [q, setQ] = useState('');
   const regional = regionSpecies(region);
+  const SPECIES = allKnownSpecies();
   const pool = q ? SPECIES : regional;
   const res = pool.filter((s) => !q || `${s.common} ${s.sci}`.toLowerCase().includes(q.toLowerCase())).slice(0, 40);
   return (
@@ -160,9 +176,9 @@ function IdentifySheet({ onClose, onPick }: { onClose: () => void; onPick: (id: 
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search species" aria-label="Search species"
         style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: 'var(--ink)', border: '2px solid var(--smoke)' }} />
       {res.map((s) => (
-        <button key={s.id} className="srow" onClick={() => onPick(s.id, s.occ[region] ? 'self-reported' : 'vagrant')}>
+        <button key={s.id} className="srow" onClick={() => onPick(s.id, regional.some((r) => r.id === s.id) ? 'self-reported' : 'vagrant')}>
           <Sprite species={s} mode="static" scale={1} />
-          <span className="grow"><span className="name">{s.common}</span><br /><span className="sci">{s.sci}{!s.occ[region] ? ' · would file as vagrant' : ''}</span></span>
+          <span className="grow"><span className="name">{s.common}</span><br /><span className="sci">{s.sci}{!regional.some((r) => r.id === s.id) ? ' · would file as vagrant' : ''}</span></span>
         </button>
       ))}
     </Sheet>

@@ -1,179 +1,140 @@
-import { useEffect, useRef, useState } from 'react';
-import { REGIONS, REGION_BY_CODE, nearestRegion, regionStamp } from '../../data/regions';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SPECIES_BY_ID } from '../../data/species';
-import { defaultParts, renderFrames } from '../../core/pixel/sprite';
-import { setState, getState, logEvent } from '../../app/store';
-import type { Habitat } from '../../data/types';
+import { setState, getState, logEvent, setRegion, setTrainer, setPartner, useGame } from '../../app/store';
 import { paintSceneThumb } from '../../render/diorama';
-import { Sprite, frameImage, useReducedMotion } from '../components';
-import { sfx } from '../../app/audio';
+import { Sprite, useReducedMotion } from '../components';
+import { Dialog, Types, BirdThumb, Capsule } from '../game';
+import { sfx, music } from '../../app/audio';
+import { Professor } from '../Professor';
+import { RegionPicker } from './RegionPicker';
+import { getRegion, regionLabel } from '../../data/geo';
+import { regionEntries, ensureRegion, onProviderChange, providerStatus } from '../../data/provider';
+import { typesOf } from '../../core/rarity';
+import type { Species } from '../../data/types';
 
-function BootBackdrop() {
+function SceneBackdrop({ opacity = 0.45 }: { opacity?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { paintSceneThumb(ref.current!, 'urban', 'night', 200, 216); }, []);
-  return <canvas ref={ref} className="pix" aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.35, zIndex: -1 }} />;
+  useEffect(() => { paintSceneThumb(ref.current!, 'woodland', 'dawn', 200, 300); }, []);
+  return <canvas ref={ref} className="pix" aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity, zIndex: -1 }} />;
 }
 
 export function Boot({ onDone }: { onDone: () => void }) {
-  const ref = useRef<HTMLCanvasElement>(null);
   const reduced = useReducedMotion();
-  useEffect(() => {
-    const t = setTimeout(onDone, reduced ? 300 : 1200);
-    const c = ref.current!; const g = c.getContext('2d')!;
-    const robin = renderFrames(SPECIES_BY_ID.amerob, defaultParts(SPECIES_BY_ID.amerob));
-    const start = performance.now();
-    let raf = 0;
-    const tmp = document.createElement('canvas'); tmp.width = 32; tmp.height = 32;
-    const draw = () => {
-      const k = Math.min(1, (performance.now() - start) / 1100);
-      g.fillStyle = '#14121F'; g.fillRect(0, 0, 96, 64);
-      // cartridge slot
-      g.fillStyle = '#2B2440'; g.fillRect(20, 44, 56, 8); g.fillStyle = '#000'; g.fillRect(24, 46, 48, 3);
-      const cy = Math.round(-30 + Math.min(1, k * 2) * 52);
-      g.fillStyle = '#5B5A7A'; g.fillRect(30, cy, 36, 26); g.fillStyle = '#F2C14E'; g.fillRect(34, cy + 4, 28, 12);
-      g.fillStyle = '#14121F'; g.fillRect(36, cy + 6, 2, 2);
-      // hopping bird
-      const bx = Math.round(-30 + Math.max(0, k - 0.35) * 1.6 * 70);
-      const hop = Math.abs(Math.sin(k * 14)) * 4;
-      tmp.getContext('2d')!.putImageData(frameImage(robin[k > 0.85 ? 0 : 7]), 0, 0);
-      g.drawImage(tmp, Math.min(bx, 60), Math.round(14 - hop));
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => { clearTimeout(t); cancelAnimationFrame(raf); };
-  }, []);
+  useEffect(() => { music('title'); }, []);
   return (
-    <div className="screen" onClick={onDone} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, position: 'relative', isolation: 'isolate' }} aria-label="Starting. Tap to skip.">
-      <BootBackdrop />
-      <canvas ref={ref} width={96} height={64} className="pix" style={{ width: 288, height: 192 }} aria-hidden />
-      <h1 style={{ fontSize: 32, lineHeight: '40px' }}><span>PIXEL </span><span style={{ color: 'var(--accent)' }}>BIRDER</span></h1>
-      <p className="label">Tap to skip</p>
+    <div className="screen" onClick={() => { sfx.select(); onDone(); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, position: 'relative', isolation: 'isolate' }}>
+      <SceneBackdrop opacity={0.55} />
+      <div style={{ animation: reduced ? undefined : 'bob 900ms steps(2) infinite' }}><Sprite species={SPECIES_BY_ID.norcar} scale={4} mode="fly" /></div>
+      <h1 className="title-logo">BIRDLY<b>QUEST</b></h1>
+      <p className="small" style={{ margin: 0, textShadow: '1px 1px 0 #000' }}>Catch real birds with your camera.</p>
+      <p className="press mt24">TAP TO START</p>
     </div>
   );
 }
 
-function PromiseDemo() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const reduced = useReducedMotion();
-  useEffect(() => {
-    const sp = SPECIES_BY_ID.norcar;
-    const f = renderFrames(sp, defaultParts(sp))[0];
-    const c = ref.current!; const g = c.getContext('2d')!;
-    const tmp = document.createElement('canvas'); tmp.width = 32; tmp.height = 32;
-    tmp.getContext('2d')!.putImageData(frameImage(f), 0, 0);
-    let i = reduced ? 2 : 0;
-    const paint = () => {
-      g.imageSmoothingEnabled = i === 0;
-      g.fillStyle = '#9FD3E0'; g.fillRect(0, 0, 192, 192);
-      if (i === 0) { g.filter = 'blur(6px) saturate(1.2)'; g.drawImage(tmp, 0, 0, 192, 192); g.filter = 'none'; }
-      else if (i === 1) { const m = document.createElement('canvas'); m.width = 8; m.height = 8; const mg = m.getContext('2d')!; mg.fillStyle = '#9FD3E0'; mg.fillRect(0, 0, 8, 8); mg.drawImage(tmp, 0, 0, 8, 8); g.drawImage(m, 0, 0, 192, 192); }
-      else g.drawImage(tmp, 0, 0, 192, 192);
-    };
-    paint();
-    if (reduced) return;
-    const t = setInterval(() => { i = (i + 1) % 3; paint(); }, 680);
-    return () => clearInterval(t);
-  }, [reduced]);
-  return (
-    <div className="taped tilt-l" style={{ width: 216 }}>
-      <canvas ref={ref} width={192} height={192} style={{ width: 204, height: 204, imageRendering: 'pixelated' }} role="img" aria-label="A photo of a cardinal turning into a 32 by 32 pixel sprite" />
-    </div>
-  );
-}
-
-const PATCHES: { key: string; label: string; habitat: Habitat; scene: Habitat; phase?: 'day' | 'golden' | 'morning' }[] = [
-  { key: 'window', label: 'Window / Balcony', habitat: 'urban', scene: 'urban' },
-  { key: 'yard', label: 'Yard / Garden', habitat: 'urban', scene: 'urban', phase: 'golden' },
-  { key: 'park', label: 'Park / Woods', habitat: 'woodland', scene: 'woodland', phase: 'morning' },
-  { key: 'shore', label: 'Shore / Wetland', habitat: 'water', scene: 'water' },
-];
-
-function Scene({ biome, phase = 'day' }: { biome: Habitat; phase?: 'day' | 'golden' | 'morning' }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { paintSceneThumb(ref.current!, biome, phase, 150, 170); }, [biome, phase]);
-  return <canvas ref={ref} width={150} height={170} className="pix" style={{ width: '100%', aspectRatio: '150/170', height: 'auto', display: 'block' }} aria-hidden />;
-}
+const PROF = SPECIES_BY_ID.grhowl;
 
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
-  const [step, setStep] = useState<'promise' | 'place' | 'patch'>('promise');
-  const [region, setRegion] = useState(getState().region);
-  const [query, setQuery] = useState('');
-  const [geoMsg, setGeoMsg] = useState('');
+  const [step, setStep] = useState<'intro' | 'name' | 'region' | 'partner' | 'outro'>('intro');
+  const [name, setName] = useState(getState().trainerName);
+  const region = useGame((s) => s.region);
   useEffect(() => { logEvent('onboarding_step', step); }, [step]);
+  useEffect(() => { music('title'); }, []);
 
-  const finish = (habitat: Habitat) => {
-    setState((s) => ({ ...s, region, habitat, onboarded: true, diorama: { ...s.diorama, biome: habitat } }));
-    sfx.sparkle();
-    onFinish();
-  };
-  const skip = () => { finish('urban'); };
+  const prof = (
+    <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 20px' }}>
+      <div style={{ filter: 'drop-shadow(4px 4px 0 #000)' }}><Professor height={144} /></div>
+    </div>
+  );
 
-  if (step === 'promise') {
+  if (step === 'intro') {
     return (
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32, textAlign: 'center' }}>
-        <PromiseDemo />
-        <h1 style={{ fontSize: 20, lineHeight: '30px', maxWidth: 300 }}>Every bird you see becomes a sprite.</h1>
-        <button className="btn primary big block" onClick={() => setStep('place')}>Continue</button>
+      <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
+        <SceneBackdrop />
+        {prof}
+        <Dialog speaker="Professor Rowan" lines={[
+          'Welcome, traveller, to the world of BIRDS! I am Rowan, druid of the old woods.',
+          'Real wild birds live all around you — in parks, on rooftops, by the water.',
+          'Snap a photo of one with BirdlyQuest, and it is caught: it joins your BirdDex as a pixel companion.',
+          'Every bird you catch is drawn from YOUR photo. No two trainers have the same birds.',
+          'Now then… what should I call you?',
+        ]} onDone={() => setStep('name')} />
       </div>
     );
   }
 
-  if (step === 'place') {
-    const q = query.trim().toLowerCase();
-    const list = REGIONS.filter((r) => !q || `${r.countryName} ${r.name} ${r.code}`.toLowerCase().includes(q));
-    const useLocation = () => {
-      if (!navigator.geolocation) { setGeoMsg('Location is not available on this device. Pick from the list.'); return; }
-      setGeoMsg('Finding your region…');
-      navigator.geolocation.getCurrentPosition(
-        (p) => {
-          const r = nearestRegion(p.coords.latitude, p.coords.longitude); // coordinates are dropped right here
-          setRegion(r.code); setGeoMsg(`Nearest seed region: ${r.name}. Coordinates were not stored.`);
-        },
-        () => setGeoMsg('No location permission. Pick your region from the list instead.'),
-        { maximumAge: 600000, timeout: 8000, enableHighAccuracy: false },
-      );
-    };
+  if (step === 'name') {
+    return (
+      <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
+        {prof}
+        <label className="label" htmlFor="tname">Trainer name</label>
+        <input id="tname" autoFocus value={name} maxLength={16} onChange={(e) => setName(e.target.value)} placeholder="Your name"
+          style={{ minHeight: 56, padding: '8px 14px', background: '#000', border: '3px solid var(--accent)', fontFamily: 'var(--px)', fontSize: 20, textTransform: 'uppercase', borderRadius: 0 }} />
+        <button className="btn primary big block" onClick={() => { setTrainer(name.trim() || 'Birder'); sfx.select(); setStep('region'); }}>{name.trim() ? 'That’s me' : 'Skip'}</button>
+      </div>
+    );
+  }
+
+  if (step === 'region') {
     return (
       <div className="screen">
-        <div className="row between mb16"><h2>Where do you live?</h2><button className="link" onClick={skip}>Skip setup</button></div>
-        <input type="search" placeholder="Search country or region" value={query} onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search regions" style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: 'var(--ink)', border: '2px solid var(--smoke)', borderRadius: 0 }} />
-        <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0' }}>
-          {list.map((r) => (
-            <li key={r.code}>
-              <button className="srow" onClick={() => setRegion(r.code)} aria-pressed={region === r.code} style={{ color: region === r.code ? 'var(--accent)' : undefined }}>
-                <span className="grow"><span className="name">{r.name}</span><br /><span className="small muted">{r.countryName}</span></span>
-                <span className="px small">{region === r.code ? '● ' : ''}{r.code}</span>
-              </button>
-            </li>
-          ))}
-          {!list.length && <li className="muted small">No seed region matches. PIXEL BIRDER covers nine regions in v1. Pick the nearest one.</li>}
-        </ul>
-        <button className="btn ghost block" onClick={useLocation}>Use my location</button>
-        {geoMsg && <p className="small muted" role="status">{geoMsg}</p>}
-        <div className="panel flat mt16" style={{ textAlign: 'center' }}>
-          <span className="stampmark sun" aria-label={`Selected region ${regionStamp(region)}`}>{regionStamp(region)}</span>
+        <Dialog speaker="Professor Rowan" lines={[`${name.trim() || 'Birder'}! Where do you live? Every place has its own birds.`]} />
+        <div className="mt16">
+          <RegionPicker value={getState().onboarded ? region : undefined} onPick={(code) => { setRegion(code); setStep('partner'); }} />
         </div>
-        <button className="btn primary big block" onClick={() => setStep('patch')}>This is my region</button>
       </div>
     );
   }
 
+  if (step === 'partner') return <PartnerPick region={region} onDone={() => setStep('outro')} />;
+
+  const r = getRegion(region);
+  return (
+    <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', isolation: 'isolate', paddingBottom: 32 }}>
+      <SceneBackdrop />
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}><Capsule size={72} /></div>
+      <Dialog speaker="Professor Rowan" lines={[
+        `${r.flag ?? ''} ${regionLabel(region)}. Splendid birding country!`,
+        'Here are your Snap Capsules. Point your camera at a real bird and press the shutter.',
+        'Fill your BirdDex, earn badges, and grow your Aviary. Your quest begins now!',
+      ]} onDone={() => {
+        setState((s) => ({ ...s, onboarded: true, diorama: { ...s.diorama, biome: s.habitat } }));
+        sfx.levelUp(); onFinish();
+      }} />
+    </div>
+  );
+}
+
+function PartnerPick({ region, onDone }: { region: string; onDone: () => void }) {
+  const [, force] = useState(0);
+  useEffect(() => { ensureRegion(region); return onProviderChange(() => force((x) => x + 1)); }, [region]);
+  const status = providerStatus(region);
+  const choices = useMemo(() => {
+    const top = regionEntries(region).filter((e) => !e.sp.sensitive && e.sp.archetype !== 'owl').slice(0, 40);
+    const out: Species[] = []; const types = new Set<string>();
+    for (const e of top) { const t = typesOf(e.sp)[0]; if (!types.has(t)) { types.add(t); out.push(e.sp); } if (out.length === 3) break; }
+    for (const e of top) { if (out.length >= 3) break; if (!out.includes(e.sp)) out.push(e.sp); }
+    return out;
+  }, [region, status]);
+  const [pick, setPick] = useState<Species | null>(null);
   return (
     <div className="screen">
-      <div className="row between mb8"><h2>Where do you bird most?</h2><button className="link" onClick={skip}>Skip</button></div>
-      <p className="muted small mb16">You can change this anytime.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {PATCHES.map((p) => (
-          <button key={p.key} className="panel" style={{ padding: 6, margin: 0, textAlign: 'left' }} onClick={() => finish(p.habitat)}>
-            <Scene biome={p.scene} phase={p.phase} />
-            <span className="px" style={{ display: 'block', fontSize: 12, marginTop: 6 }}>{p.label}</span>
+      <Dialog speaker="Professor Rowan" lines={['Every trainer needs a partner. These three are common where you live. Choose one!']} />
+      {status === 'loading' && <p className="small muted mt8">Looking up the birds of {regionLabel(region)}…</p>}
+      <div className="col mt16" style={{ gap: 12 }}>
+        {choices.map((sp) => (
+          <button key={sp.id} className={`panel ${pick?.id === sp.id ? 'highlight' : ''}`} style={{ margin: 0, textAlign: 'left', display: 'flex', gap: 12, alignItems: 'center' }}
+            onClick={() => { sfx.select(); setPick(sp); }} aria-pressed={pick?.id === sp.id}>
+            <div style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={sp} scale={2} mode={pick?.id === sp.id ? 'idle' : 'static'} /></div>
+            <span className="grow"><span className="name">{sp.common}</span><br /><Types sp={sp} /></span>
+            <BirdThumb sp={sp} size={56} />
           </button>
         ))}
       </div>
-      <p className="small muted mt16">Region: {REGION_BY_CODE[region]?.name}</p>
+      <button className="btn primary big block mt16" disabled={!pick} onClick={() => { if (pick) { setPartner(pick); sfx.caught(); onDone(); } }}>
+        {pick ? `Choose ${pick.common}` : 'Pick a partner'}
+      </button>
+      <p className="small muted">Your partner is a gift, not a catch. Your BirdDex fills only with birds you photograph.</p>
     </div>
   );
 }
-
-export { Sprite };

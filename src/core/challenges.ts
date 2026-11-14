@@ -1,8 +1,9 @@
 // GAM-5 challenges: 3 daily (seeded per day, no repeats within 7 days), 1 weekly, 1 seasonal.
 import type { ChallengeSlot, GameState, Sighting } from './model';
-import { SPECIES_BY_ID } from '../data/species';
-import { REGION_BY_CODE } from '../data/regions';
+import { speciesById } from '../data/provider';
+import { getRegion } from '../data/geo';
 import { regionSpecies } from './rarity';
+import { regionEntries } from '../data/provider';
 import { dayKey, daysBetween } from './xp';
 import { fnv1a } from './pixel/sprite';
 
@@ -20,12 +21,12 @@ export const DAILY: ChallengeDef[] = [
   { id: 'D1', kind: 'daily', xp: 60, quick: true, goal: (n) => Number(n) || 2, label: (n) => `Catch ${n} birds`, progress: (_s, sc) => sc.length },
   { id: 'D2', kind: 'daily', xp: 120, goal: () => 1, label: () => 'Catch a new species', progress: (s, sc) => sc.filter((x) => isNew(s, x)).length },
   { id: 'D3', kind: 'daily', xp: 80, goal: () => 1, label: (n) => `Score ${n}+ on a photo`, progress: (_s, sc, n) => sc.filter((x) => (x.fieldcraft?.total ?? 0) >= Number(n)).length },
-  { id: 'D4', kind: 'daily', xp: 100, goal: () => 1, label: (f) => `Catch one of the ${String(f).toLowerCase()}`, progress: (_s, sc, f) => sc.filter((x) => x.speciesId && SPECIES_BY_ID[x.speciesId]?.familyName === f).length },
+  { id: 'D4', kind: 'daily', xp: 100, goal: () => 1, label: (f) => `Catch one of the ${String(f).toLowerCase()}`, progress: (_s, sc, f) => sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.familyName === f).length },
   { id: 'D5', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Catch a bird before 08:00', progress: (_s, sc) => sc.filter((x) => x.hour < 8).length },
   { id: 'D6', kind: 'daily', xp: 90, goal: () => 1, label: (h) => `Catch in a ${HAB_LABEL[String(h)]}`, progress: (_s, sc, h) => sc.filter((x) => x.habitat === h).length },
   { id: 'D7', kind: 'daily', xp: 110, goal: () => 1, label: () => 'Catch an Uncommon or rarer', progress: (_s, sc) => sc.filter((x) => x.rarity !== 'common').length },
   { id: 'D8', kind: 'daily', xp: 100, goal: () => 1, label: () => 'File a plumage record', progress: (_s, sc) => sc.filter((x) => x.newPlumage).length },
-  { id: 'D9', kind: 'daily', xp: 70, quick: true, goal: () => 1, label: () => 'Sit Spot for 5 minutes', progress: (s) => s.events.sitSpots.filter((d) => d === dayKey(new Date())).length },
+  { id: 'D9', kind: 'daily', xp: 70, quick: true, goal: () => 2, label: () => 'Catch 2 different species', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId).map((x) => x.speciesId)).size },
   { id: 'D10', kind: 'daily', xp: 80, quick: true, goal: () => 3, label: () => 'Catch 3 birds in one session', progress: (_s, sc) => maxInSession(sc) },
   { id: 'D11', kind: 'daily', xp: 90, goal: () => 1, label: () => 'Catch a bird after sunset', progress: (_s, sc) => sc.filter((x) => x.phase === 'dusk' || x.phase === 'night').length },
   { id: 'D12', kind: 'daily', xp: 50, goal: () => 1, label: () => 'Share a journal spread', progress: (s) => s.events.shares.filter((d) => d === dayKey(new Date())).length },
@@ -39,7 +40,7 @@ function maxInSession(sc: Sighting[]): number {
 }
 
 export const WEEKLY: ChallengeDef[] = [
-  { id: 'W1', kind: 'weekly', xp: 250, goal: () => 3, label: (f) => `Family focus: 3 ${String(f).toLowerCase()}`, progress: (_s, sc, f) => new Set(sc.filter((x) => x.speciesId && SPECIES_BY_ID[x.speciesId]?.familyName === f).map((x) => x.speciesId)).size },
+  { id: 'W1', kind: 'weekly', xp: 250, goal: () => 3, label: (f) => `Family focus: 3 ${String(f).toLowerCase()}`, progress: (_s, sc, f) => new Set(sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.familyName === f).map((x) => x.speciesId)).size },
   { id: 'W2', kind: 'weekly', xp: 300, goal: () => 15, label: () => 'Big Day: 15 species in 24 hours', progress: (_s, sc) => bigDay(sc) },
   { id: 'W3', kind: 'weekly', xp: 220, goal: () => 5, label: () => 'Craft week: five photos at 80+', progress: (_s, sc) => sc.filter((x) => x.mode === 'field' && (x.fieldcraft?.total ?? 0) >= 80).length },
   { id: 'W4', kind: 'weekly', xp: 250, goal: () => 8, label: () => 'Patch challenge: 8 species in one habitat', progress: (_s, sc) => {
@@ -60,10 +61,16 @@ function bigDay(sc: Sighting[]): number {
   return best;
 }
 
-const migrant = (x: Sighting) => { const sp = x.speciesId ? SPECIES_BY_ID[x.speciesId] : null; const o = sp?.occ[x.region]; return !!o && o[1] !== 'R'; };
+const migrant = (x: Sighting) => {
+  const sp = speciesById(x.speciesId); if (!sp) return false;
+  const o = sp.occ[x.region] ?? sp.occ[x.region.split('-')[0]];
+  if (o) return o[1] !== 'R';
+  const e = regionEntries(x.region).find((r) => r.sp.id === sp.id);
+  return !!e && e.seasonal < 0.9; // live lists: not present all year → a migrant here
+};
 export const SEASONAL: ChallengeDef[] = [
   { id: 'S1', kind: 'seasonal', xp: 500, goal: () => 15, label: () => 'Spring Migration: 15 migrants', progress: (_s, sc) => new Set(sc.filter(migrant).map((x) => x.speciesId)).size },
-  { id: 'S2', kind: 'seasonal', xp: 400, goal: () => 8, label: () => 'Winter Waterfowl: 8 waterfowl', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId && SPECIES_BY_ID[x.speciesId]?.family === 'Anatidae').map((x) => x.speciesId)).size },
+  { id: 'S2', kind: 'seasonal', xp: 400, goal: () => 8, label: () => 'Winter Waterfowl: 8 waterfowl', progress: (_s, sc) => new Set(sc.filter((x) => x.speciesId && speciesById(x.speciesId)?.family === 'Anatidae').map((x) => x.speciesId)).size },
   { id: 'S3', kind: 'seasonal', xp: 350, goal: () => 5, label: () => 'Dawn Chorus Month: 5 catches before 07:00', progress: (_s, sc) => sc.filter((x) => x.hour < 7).length },
   { id: 'S4', kind: 'seasonal', xp: 500, goal: () => 10, label: () => 'Autumn Passage: 10 migrants', progress: (_s, sc) => new Set(sc.filter(migrant).map((x) => x.speciesId)).size },
 ];
@@ -128,7 +135,7 @@ export function pickWeekly(s: GameState, week: string): ChallengeSlot {
 }
 
 export function pickSeasonal(region: string, d: Date): ChallengeSlot | null {
-  const south = !!REGION_BY_CODE[region]?.south;
+  const south = !!getRegion(region)?.south;
   const m = (d.getMonth() + (south ? 6 : 0)) % 12;
   if (m >= 2 && m <= 4) return { id: m === 3 ? 'S3' : 'S1', claimed: false };
   if (m >= 8 && m <= 10) return { id: 'S4', claimed: false };

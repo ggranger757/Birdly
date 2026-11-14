@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, setState, exportBackup, importBackup, resetAll, getState, PIPELINE_VERSION } from '../../app/store';
-import { REGIONS } from '../../data/regions';
+import { useGame, setState, exportBackup, importBackup, resetAll, getState, PIPELINE_VERSION, setRegion, setTrainer } from '../../app/store';
+import { RegionPicker } from './RegionPicker';
+import { regionLabel, getRegion } from '../../data/geo';
+import { music, currentTheme } from '../../app/audio';
 import type { Habitat } from '../../data/types';
 import { TopBar, Sheet, Icon, Sprite } from '../components';
 import { photoKeys } from '../../app/db';
@@ -28,13 +30,14 @@ export function Settings() {
   const [taps, setTaps] = useState(0);
   const [msg, setMsg] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [pick, setPick] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (patch: Partial<typeof st.settings>) => setState((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
   useEffect(() => { if (taps >= 5) { setTaps(0); nav.open({ name: 'debug' }); } }, [taps]);
 
   const download = async (photos: boolean) => {
     const blob = await exportBackup(photos);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pixel-birder-journal-${dayKey(new Date())}.json`; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `birdlyquest-backup-${dayKey(new Date())}.json`; a.click();
     setMsg('Backup downloaded. Keep it somewhere safe.');
   };
 
@@ -42,21 +45,26 @@ export function Settings() {
     <div className="overlay">
       <TopBar title="Settings" onBack={nav.back} />
       <div className="screen">
-        <div className="label mb8">Your patch</div>
+        <div className="label mb8">Trainer</div>
         <div className="panel">
-          <label className="small muted" htmlFor="region">Region</label>
-          <select id="region" className="filter" style={{ width: '100%' }} value={st.region} onChange={(e) => setState((s) => ({ ...s, region: e.target.value }))}>
-            {REGIONS.map((r) => <option key={r.code} value={r.code}>{r.name} · {r.countryName}</option>)}
-          </select>
-          <label className="small muted mt8" htmlFor="hab" style={{ display: 'block' }}>Habitat</label>
+          <label className="small muted" htmlFor="tn">Trainer name</label>
+          <input id="tn" defaultValue={st.trainerName} maxLength={16} onBlur={(e) => setTrainer(e.target.value.trim() || 'Birder')}
+            style={{ width: '100%', minHeight: 48, padding: '8px 12px', background: '#000', border: '2px solid var(--smoke)', fontSize: 16 }} />
+          <div className="small muted mt16">Region</div>
+          <button className="srow" onClick={() => setPick(true)}>
+            <span style={{ fontSize: 26 }} aria-hidden>{getRegion(st.region).flag}</span>
+            <span className="grow name">{regionLabel(st.region)}</span><span className="small" style={{ color: 'var(--accent)' }}>Change ›</span>
+          </button>
+          <label className="small muted mt8" htmlFor="hab" style={{ display: 'block' }}>Where you bird most</label>
           <select id="hab" className="filter" style={{ width: '100%' }} value={st.habitat} onChange={(e) => setState((s) => ({ ...s, habitat: e.target.value as Habitat }))}>
-            <option value="urban">Urban / suburban (window, yard)</option><option value="woodland">Woodland / park</option><option value="water">Water / wetland / shore</option>
+            <option value="urban">City & gardens</option><option value="woodland">Parks & woods</option><option value="water">Water, wetland & shore</option>
           </select>
         </div>
 
         <div className="label mb8">Play</div>
         <div className="panel">
-          <Toggle label="Sound" on={st.settings.sound} set={(v) => set({ sound: v })} hint="Chiptune effects. Every sound has a visual equivalent." />
+          <Toggle label="Music" on={st.settings.music} set={(v) => { set({ music: v }); const t = currentTheme(); music(null); if (v) music((t as 'explore') ?? 'explore'); }} hint="Original chiptune themes." />
+          <Toggle label="Sound effects" on={st.settings.sound} set={(v) => set({ sound: v })} hint="Every sound has a visual equivalent." />
           <Toggle label="Haptics" on={st.settings.haptics} set={(v) => set({ haptics: v })} />
           <Toggle label="Viewfinder grid" on={st.settings.grid} set={(v) => set({ grid: v })} />
           <Toggle label="Reference photos" on={st.settings.refPhotos} set={(v) => set({ refPhotos: v })} hint="Real photos of each species from iNaturalist, credited to the photographer." />
@@ -86,7 +94,7 @@ export function Settings() {
 
         <div className="label mb8">Birds first</div>
         <div className="panel small">
-          <p style={{ marginTop: 0 }}>PIXEL BIRDER donates nothing by existing. If you want to help birds, here are three organisations doing the work:</p>
+          <p style={{ marginTop: 0 }}>BirdlyQuest donates nothing by existing. If you want to help birds, here are three organisations doing the work:</p>
           <ul style={{ paddingLeft: 18 }}>
             <li><a href="https://www.birdlife.org" target="_blank" rel="noopener">BirdLife International</a></li>
             <li><a href="https://www.birds.cornell.edu" target="_blank" rel="noopener">Cornell Lab of Ornithology</a></li>
@@ -97,14 +105,20 @@ export function Settings() {
 
         <div className="label mb8">Credits & data</div>
         <div className="panel small">
-          <p style={{ marginTop: 0 }}>Species list, facts and sprites are curated for this game. Taxonomy follows current eBird/Clements names. Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (non-commercial). Reference photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors, each under its own Creative Commons licence and credited where shown. Call recordings link out to <a href="https://xeno-canto.org" target="_blank" rel="noopener">Xeno-canto</a>.</p>
+          <p style={{ marginTop: 0 }}>Local bird lists, map sightings and reference photos come from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> research-grade observations. Map tiles © OpenStreetMap contributors © CARTO. Countries and regions: countries-states-cities-database (ODbL). A curated set of species and facts works offline. Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (non-commercial). Reference photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors, each under its own Creative Commons licence and credited where shown. Call recordings link out to <a href="https://xeno-canto.org" target="_blank" rel="noopener">Xeno-canto</a>.</p>
           <p>Fonts: Silkscreen, Inter, Atkinson Hyperlegible (SIL Open Font License).</p>
           <button className="link" onClick={() => nav.open({ name: 'lab' })}>Sprite lab</button>
         </div>
 
         <button className="btn danger block" onClick={() => setConfirm(true)}>Delete everything</button>
-        <p className="small muted mt16" onClick={() => setTaps((t) => t + 1)} style={{ textAlign: 'center' }}>PIXEL BIRDER v{__APP_VERSION__} · pipeline v{PIPELINE_VERSION}</p>
+        <p className="small muted mt16" onClick={() => setTaps((t) => t + 1)} style={{ textAlign: 'center' }}>BirdlyQuest v{__APP_VERSION__} · pipeline v{PIPELINE_VERSION}</p>
       </div>
+      {pick && (
+        <Sheet onClose={() => setPick(false)} label="Choose your region">
+          <h3 className="mb8">Choose your region</h3>
+          <RegionPicker value={st.region} onPick={(c) => { setRegion(c); setPick(false); }} />
+        </Sheet>
+      )}
       {confirm && (
         <Sheet onClose={() => setConfirm(false)} label="Delete everything">
           <h3 className="mb8">Delete your whole journal?</h3>

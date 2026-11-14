@@ -3,23 +3,19 @@ import type { Shot } from '../app/photo';
 import type { CatchMode } from '../core/xp';
 import type { FieldcraftScore } from '../core/pixel/extract';
 
-export type Tab = 'field' | 'journal' | 'map' | 'habitat' | 'you';
+export type Tab = 'explore' | 'dex' | 'aviary' | 'you';
 
 export interface CaptureJob {
   mode: CatchMode;
   shot: Shot;
-  paletteRgba?: Uint8ClampedArray; // Window Mode: clean plate for palette extraction
-  knownSpecies?: string;          // Window Mode: the game spawned this bird, so it knows what it is
   scoreOverride?: Partial<FieldcraftScore>;
-  returnTo?: 'window' | 'viewfinder' | 'journal';
-  sit?: boolean;
+  returnTo?: 'viewfinder' | 'journal';
 }
 
 export type Route =
   | { name: 'species'; id: string; sightingId?: string }
   | { name: 'spread'; sightingId: string }
   | { name: 'viewfinder' }
-  | { name: 'window'; sit?: boolean; starter?: boolean }
   | { name: 'catch'; job: CaptureJob }
   | { name: 'sketch' }
   | { name: 'badges' }

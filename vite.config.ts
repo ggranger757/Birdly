@@ -20,9 +20,9 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['icons/*.png', 'favicon.png'],
       manifest: {
-        name: 'PIXEL BIRDER',
-        short_name: 'Pixel Birder',
-        description: 'Every bird you see becomes a sprite.',
+        name: 'BirdlyQuest',
+        short_name: 'BirdlyQuest',
+        description: 'Catch real birds with your camera. A pixel bird-collecting quest.',
         start_url: './',
         scope: './',
         display: 'standalone',
@@ -38,8 +38,19 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2,webmanifest}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
         runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/[abcd]\.basemaps\.cartocdn\.com\//,
+            handler: 'CacheFirst',
+            options: { cacheName: 'map-tiles', cacheableResponse: { statuses: [0, 200] }, expiration: { maxEntries: 600, maxAgeSeconds: 30 * 864e2 } }
+          },
+          {
+            urlPattern: /^https:\/\/api\.inaturalist\.org\//,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'inat-api', networkTimeoutSeconds: 8, cacheableResponse: { statuses: [200] }, expiration: { maxEntries: 120, maxAgeSeconds: 7 * 864e2 } }
+          },
           {
             // iNaturalist reference photos (opaque cross-origin images → status 0)
             urlPattern: /^https:\/\/(inaturalist-open-data\.s3\.amazonaws\.com|static\.inaturalist\.org)\//,

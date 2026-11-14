@@ -172,6 +172,27 @@ export function paintDecor(g: CanvasRenderingContext2D, key: string, x: number, 
   }
 }
 
+/** The Aviary feeder: rope, glass tube showing the seed level, and a tray birds perch on. */
+function feederGeom(W: number, H: number) {
+  const x = Math.round(W * 0.64), top = Math.round(H * 0.1);
+  return { x, top, tubeY: top + 4, tubeH: 26, trayY: top + 32 };
+}
+function paintFeeder(g: CanvasRenderingContext2D, W: number, H: number, fill: number) {
+  const { x, top, tubeY, tubeH, trayY } = feederGeom(W, H);
+  rect(g, x, 0, 1, top, C('ink'));
+  rect(g, x - 8, top, 17, 3, C('rust')); rect(g, x - 7, top + 1, 15, 1, C('oriole'));          // roof
+  rect(g, x - 6, tubeY, 13, tubeH, C('ink'));                                                   // tube outline
+  rect(g, x - 5, tubeY, 11, tubeH, 'rgba(214,238,242,0.35)');                                  // glass
+  const lvl = Math.round((tubeH - 2) * Math.max(0, Math.min(1, fill)));
+  if (lvl > 0) {
+    rect(g, x - 5, tubeY + tubeH - 1 - lvl, 11, lvl, C('warbler'));
+    for (let yy = tubeY + tubeH - lvl; yy < tubeY + tubeH - 1; yy += 2) for (let xx = x - 5 + (yy % 4 === 0 ? 1 : 0); xx < x + 6; xx += 3) rect(g, xx, yy, 1, 1, C('bark'));
+  }
+  rect(g, x - 4, tubeY + 2, 1, tubeH - 6, 'rgba(255,255,255,0.55)');                          // glint
+  rect(g, x - 13, trayY, 27, 2, C('rust')); rect(g, x - 13, trayY + 2, 27, 1, C('brick'));     // tray
+  if (fill > 0) for (let i = -11; i < 12; i += 3) rect(g, x + i, trayY - 1, 1, 1, C('warbler'));
+}
+
 function paintWindowFrame(g: CanvasRenderingContext2D, W: number, H: number) {
   const f = '#12161B', d = '#07090B';
   rect(g, 0, 0, W, 4, f); rect(g, 0, 0, 4, H, f); rect(g, W - 4, 0, 4, H, f); rect(g, 0, H - 5, W, 5, f);
@@ -195,9 +216,10 @@ export interface Bird {
   x: number; y: number; state: 'arriving' | 'perched' | 'leaving' | 'gone';
   t0: number; from: [number, number]; leaveAt: number; flip: boolean; settledAt: number; seed: number;
   blinkAt: number; actionAt: number;
+  home?: Perch; eatUntil?: number;
 }
 
-export interface DioramaOpts { frame?: boolean; decor?: Record<string, string>; reduced?: boolean; viewW: number; viewH: number }
+export interface DioramaOpts { frame?: boolean; decor?: Record<string, string>; reduced?: boolean; viewW: number; viewH: number; feeder?: number /* 0–1 fill */ }
 
 export class Diorama {
   private ctx: CanvasRenderingContext2D;
@@ -227,9 +249,25 @@ export class Diorama {
     paintLayers(g, this.imgs.slice(Math.max(0, n - 2)), { ...this.scene, tint: undefined }, this.W, this.H, 0, 2);
     paintProps(g, this.L, this.W, this.H, this.phase === 'night');
     for (const [slot, key] of Object.entries(this.opts.decor ?? {})) {
+      if (slot === 'hang' && this.opts.feeder !== undefined) continue;
       const at = this.L.slots[slot]; if (at) paintDecor(g, key, at[0], at[1]);
     }
+    if (this.opts.feeder !== undefined) paintFeeder(g, this.W, this.H, this.opts.feeder);
   }
+  /** Update the feeder's fill level (0–1). */
+  setFeeder(fill: number) { this.opts.feeder = fill; if (this.imgs.length) this.bakeFront(); }
+
+  /** A bird flies to the feeder, pecks for a while, then flies home. */
+  visit(key: string, ms = 2600) {
+    const b = this.birds.find((x) => x.key === key);
+    if (!b || this.opts.feeder === undefined || b.eatUntil) return;
+    const { x, trayY } = feederGeom(this.W, this.H);
+    const spot: Perch = { x: x + (this.birds.filter((o) => o.eatUntil).length % 2 ? 8 : -6), y: trayY, kind: 'perch' };
+    b.home = b.perch; b.from = [b.x, b.y]; b.perch = spot; b.state = 'arriving'; b.t0 = performance.now();
+    b.eatUntil = b.t0 + (this.opts.reduced ? 200 : 1800) + ms; b.flip = spot.x < b.x;
+    this.onChange?.();
+  }
+
   start() {
     let last = 0;
     this.stop = onTick((t) => { if (t - last < 40) return; last = t; this.step(t); this.draw(t); });
@@ -277,6 +315,8 @@ export class Diorama {
         b.x = b.from[0] + (b.perch.x - b.from[0]) * e;
         b.y = b.from[1] + (b.perch.y - b.from[1]) * e;
         if (k >= 1) { b.state = 'perched'; b.settledAt = t; changed = true; }
+      } else if (b.state === 'perched' && b.eatUntil && t > b.eatUntil && b.home) {
+        b.from = [b.x, b.y]; b.perch = b.home; b.home = undefined; b.eatUntil = undefined; b.state = 'arriving'; b.t0 = t; b.flip = b.perch.x < b.x; changed = true;
       } else if (b.state === 'perched' && t > b.leaveAt) { this.leave(b); changed = true; }
       else if (b.state === 'leaving') {
         const k = (t - b.t0) / 1500;
@@ -290,6 +330,7 @@ export class Diorama {
 
   frameFor(b: Bird, t: number): number {
     if (b.state !== 'perched') return 8 + (Math.floor(t / 83) % 6);
+    if (b.eatUntil && t < b.eatUntil) return Math.floor(t / 180) % 2 ? 6 : 0; // pecking at the feeder
     if (this.opts.reduced) return 0;
     if (t > b.blinkAt) { if (t > b.blinkAt + 170) b.blinkAt = t + 4000 + ((b.seed * 7919 + t) % 3000); else return 4; }
     if (t > b.actionAt) {

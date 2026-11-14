@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, setState, logEvent } from '../../app/store';
-import { REGION_BY_CODE } from '../../data/regions';
+import { getRegion } from '../../data/geo';
 import { likelyNow } from '../../core/rarity';
-import { displayName } from '../../data/species';
 import { normalize, fromFile, exifDate, analyze, canvas } from '../../app/photo';
 import { Sprite, Icon, RarityTag, TopBar, RefThumb } from '../components';
 import { sfx, haptic } from '../../app/audio';
@@ -16,7 +15,7 @@ export function Viewfinder() {
   const habitat = useGame((s) => s.habitat);
   const grid = useGame((s) => s.settings.grid);
   const asked = useGame((s) => s.log.some((l) => l.e === 'camera_granted'));
-  const region = REGION_BY_CODE[regionCode];
+  const region = getRegion(regionCode);
   const short = useMemo(() => likelyNow(region, new Date(), habitat).slice(0, 5), [regionCode, habitat]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -121,7 +120,7 @@ export function Viewfinder() {
         <TopBar title="Field Mode" onBack={nav.back} backIcon="close" />
         <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
           <Icon name="photo" size={64} color="var(--accent)" />
-          <h2>PIXEL BIRDER needs the camera to catch birds.</h2>
+          <h2>BirdlyQuest needs your camera to catch real birds.</h2>
           <p className="muted small">Photos stay on this phone. Location is never read from them.</p>
           <button className="btn primary big block" onClick={start}>Allow camera</button>
           <button className="btn ghost block" onClick={() => nav.replace({ name: 'sketch' })}>Sketch it instead</button>
@@ -132,7 +131,7 @@ export function Viewfinder() {
 
   if (cam === 'denied' || cam === 'none' || cam === 'busy') {
     const copy = cam === 'denied'
-      ? ['Camera is switched off for PIXEL BIRDER.', 'Turn it on in your browser’s site settings, or sketch the bird — sketches count too.']
+      ? ['Camera is switched off for BirdlyQuest.', 'Turn it on in your browser’s site settings, or sketch the bird — sketches count too.']
       : cam === 'busy' ? ['The camera is busy.', 'Close other apps and try once more.']
         : ['No camera found on this device.', 'Sketch the bird or import a photo from today instead.'];
     return (
@@ -175,14 +174,14 @@ export function Viewfinder() {
       </div>
       <div style={{ padding: '8px 16px calc(12px + var(--safe-b))', background: 'var(--ink)' }}>
         <button className="btn ghost block small" onClick={() => setShowList((v) => !v)} aria-expanded={showList} style={{ justifyContent: 'flex-start', textTransform: 'none', fontFamily: 'var(--body)', letterSpacing: 0 }}>
-          <span className="px" style={{ fontSize: 11, color: 'var(--accent)' }}>Likely</span>&nbsp;{short.map((l) => displayName(l.sp, regionCode).split(' ').pop()).join(' · ')}
+          <span className="px" style={{ fontSize: 11, color: 'var(--accent)' }}>Likely</span>&nbsp;{short.map((l) => l.sp.common.split(' ').pop()).join(' · ')}
         </button>
         {showList && (
           <div className="hscroll mt8">
             {short.map(({ sp, rarity }) => (
               <div key={sp.id} className="panel flat" style={{ minWidth: 132, margin: 0, padding: 8 }}>
                 <div className="row"><Sprite species={sp} scale={2} mode="static" /><RefThumb sp={sp} size={40} /></div>
-                <div className="small" style={{ fontWeight: 600 }}>{displayName(sp, regionCode)}</div>
+                <div className="small" style={{ fontWeight: 600 }}>{sp.common}</div>
                 <RarityTag rarity={rarity} />
               </div>
             ))}

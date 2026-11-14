@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNav } from '../nav';
-import { useGame, counts, speciesOf, speciesCount, setBiome, buyDecor, placeDecor, toggleHabitatBird, setState, claimChallenge } from '../../app/store';
-import { REGIONS, REGION_BY_CODE } from '../../data/regions';
-import { regionSpecies } from '../../core/rarity';
-import { displayName } from '../../data/species';
+import { useGame, counts, speciesOf, speciesCount, setBiome, buyDecor, placeDecor, toggleHabitatBird, setState, claimChallenge, buyFood, collectAviary, fillFeeder, tickFeeder } from '../../app/store';
+import { FOODS, Food, hpNow, mood, MOOD_LINE, FEEDER_CAP, AVIARY_MAX, Meal } from '../../core/pets';
+import { getRegion, regionLabel } from '../../data/geo';
+import { allKnownSpecies } from '../../data/provider';
+import { music } from '../../app/audio';
+import { Types, BirdThumb, dexNo, BadgeIcon, HpBar } from '../game';
 import { Diorama, DECOR_ITEMS, DECOR_SLOTS } from '../../render/diorama';
 import { sunTimes, dayPhase } from '../../core/sun';
 import { rankFor, RANKS, liveStreak, dayKey } from '../../core/xp';
@@ -11,138 +13,173 @@ import { BADGES, TIER_FEATHERS } from '../../core/badges';
 import { challengeProgress } from '../../core/challenges';
 import type { Habitat } from '../../data/types';
 import { Sprite, Meter, Icon, useReducedMotion, Sheet, RarityTag } from '../components';
-import { sfx } from '../../app/audio';
-
-// ─── MAP: a region atlas. Coarse by design — region codes only, never pins (PRV-1, ETH-2) ───
-export function MapTab() {
-  const st = useGame((s) => s);
-  const counted = st.sightings.filter(counts);
-  return (
-    <div className="screen with-tabs">
-      <h1 style={{ fontSize: 18 }}>Map</h1>
-      <p className="small muted">Your birding, region by region. PIXEL BIRDER stores region codes, never coordinates, so there are no pins — only places.</p>
-      <PixelGlobe visited={new Set(st.sightings.map((s) => s.region))} home={st.region} />
-      {REGIONS.map((r) => {
-        const list = regionSpecies(r.code);
-        const have = new Set(counted.filter((s) => s.region === r.code).map((s) => s.speciesId)).size;
-        const catches = st.sightings.filter((s) => s.region === r.code).length;
-        return (
-          <div key={r.code} className={`panel ${r.code === st.region ? 'highlight' : ''}`} style={{ padding: 10 }}>
-            <div className="row between"><span><b>{r.name}</b> <span className="small muted">· {r.countryName}</span></span><span className="px small">{r.code}</span></div>
-            <div className="row between small mt8"><span>{have} of {list.length} species</span><span className="muted">{catches} catches</span></div>
-            <Meter value={have} max={list.length} tone={r.code === st.region ? 'sun' : 'river'} label={`${r.name} completion`} />
-            {list.length < 20 && <p className="small muted" style={{ margin: '6px 0 0' }}>Limited data for this region.</p>}
-          </div>
-        );
-      })}
-      <div className="panel dashed small">Habitats you've birded: {[...new Set(st.sightings.map((s) => s.habitat))].join(', ') || 'none yet'}.</div>
-    </div>
-  );
-}
-
-function PixelGlobe({ visited, home }: { visited: Set<string>; home: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const g = ref.current!.getContext('2d')!;
-    const w = 120, h = 60;
-    g.fillStyle = '#1F3F6E'; g.fillRect(0, 0, w, h);
-    // very coarse continents (equirectangular blobs)
-    const land: [number, number, number, number][] = [
-      [10, 8, 30, 18], [22, 26, 10, 8], [30, 32, 14, 20], [52, 8, 26, 14], [55, 22, 18, 22], [74, 8, 34, 22], [86, 30, 12, 8], [96, 38, 16, 12],
-    ];
-    g.fillStyle = '#3F7A3F';
-    for (const [x, y, ww, hh] of land) for (let yy = y; yy < y + hh; yy++) for (let xx = x; xx < x + ww; xx++) {
-      const dx = (xx - x - ww / 2) / (ww / 2), dy = (yy - y - hh / 2) / (hh / 2);
-      if (dx * dx + dy * dy < 1.05) g.fillRect(xx, yy, 1, 1);
-    }
-    for (const r of REGIONS) {
-      const x = Math.round(((r.lng + 180) / 360) * w), y = Math.round(((90 - r.lat) / 180) * h);
-      g.fillStyle = r.code === home ? '#F2C14E' : visited.has(r.code) ? '#F7F4E9' : '#8A8BA3';
-      g.fillRect(x - 1, y - 1, 3, 3);
-    }
-  }, [visited, home]);
-  return (
-    <div className="panel" style={{ padding: 6 }}>
-      <canvas ref={ref} width={120} height={60} className="pix" style={{ width: '100%', aspectRatio: '2/1', height: 'auto' }} role="img" aria-label="World map of seed regions. Gold is your home region." />
-      <div className="small muted mt8">■ gold: home · ■ cream: birded · ■ grey: seed region</div>
-    </div>
-  );
-}
+import { sfx, haptic } from '../../app/audio';
 
 // ─── HABITAT (GAM-9): cozy diorama of caught birds; decor bought with Feathers ───
 export function HabitatTab() {
+  useEffect(() => { music('aviary'); }, []);
   const nav = useNav();
   const st = useGame((s) => s);
   const reduced = useReducedMotion();
   const ref = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const dio = useRef<Diorama | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const [sheet, setSheet] = useState<'birds' | 'decor' | null>(null);
+  const [sheet, setSheet] = useState<'box' | 'decor' | 'fill' | 'shop' | null>(null);
   const [sceneLabel, setSceneLabel] = useState('');
+  const [gift, setGift] = useState(0);
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [, tick] = useState(0);
   const species = speciesCount(st);
-  const region = REGION_BY_CODE[st.region];
+  const region = getRegion(st.region);
   const now = new Date();
   const phase = dayPhase(now, sunTimes(now, region.lat, region.lng));
-  const placed = st.diorama.birds.map((id) => st.sightings.find((s) => s.id === id)).filter(Boolean) as typeof st.sightings;
+  const aviary = st.diorama.birds.map((id) => st.sightings.find((s) => s.id === id)).filter(Boolean) as typeof st.sightings;
+  const box = st.sightings.filter((s) => !st.diorama.birds.includes(s.id));
+  const fill = st.feeder.level / FEEDER_CAP;
   const biomes: { b: Habitat; label: string; need: number }[] = [
     { b: st.habitat, label: 'Home patch', need: 0 },
     ...(['urban', 'woodland', 'water'] as Habitat[]).filter((b) => b !== st.habitat).map((b) => ({ b, label: b === 'urban' ? 'Urban' : b === 'woodland' ? 'Woodland' : 'Wetland', need: 10 })),
   ];
 
-  useEffect(() => { const w = boxRef.current?.clientWidth ?? 358; setDims({ w: Math.floor(w / 2), h: Math.floor(Math.min(window.innerHeight * 0.52, 520) / 2) }); }, [st.sessions > 1 || st.sightings.length >= 2]);
+  // birds visit the feeder: on open, every 20s, and right after you fill it
+  const runFeeder = () => {
+    const m = tickFeeder();
+    if (!m.length) return;
+    setMeals(m);
+    m.forEach((meal, i) => setTimeout(() => dio.current?.visit(meal.id), i * 700));
+    sfx.sparkle();
+  };
   useEffect(() => {
-    if ((st.sessions < 2 && st.sightings.length < 2) || !dims) return;
-    const d = new Diorama(ref.current!, st.diorama.biome, phase, { decor: st.diorama.decor, reduced, viewW: dims.w, viewH: dims.h });
+    setGift(collectAviary());
+    const first = setTimeout(runFeeder, 1200);
+    const t = setInterval(() => { runFeeder(); tick((x) => x + 1); }, 20000);
+    return () => { clearTimeout(first); clearInterval(t); };
+  }, []);
+  useEffect(() => { const w = boxRef.current?.clientWidth ?? 358; setDims({ w: Math.floor(w / 2), h: Math.floor(Math.min(window.innerHeight * 0.46, 480) / 2) }); }, []);
+  useEffect(() => {
+    if (!dims) return;
+    const d = new Diorama(ref.current!, st.diorama.biome, phase, { decor: st.diorama.decor, reduced, viewW: dims.w, viewH: dims.h, feeder: fill });
+    dio.current = d;
     setSceneLabel(d.scene.label);
-    placed.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3 }));
+    const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
+    if (partner && st.partner) d.add('partner', partner, st.partner.parts, { arrive: false, seed: 1 });
+    aviary.forEach((s, i) => d.add(s.id, speciesOf(s), s.sprite.parts, { arrive: false, seed: i * 7 + 3 }));
     d.start();
-    return () => d.dispose();
-  }, [st.diorama.biome, JSON.stringify(st.diorama.decor), placed.map((p) => p.id).join(), reduced, dims]);
+    return () => { d.dispose(); dio.current = null; };
+  }, [st.diorama.biome, JSON.stringify(st.diorama.decor), aviary.map((p) => p.id).join(), reduced, dims]);
+  useEffect(() => { dio.current?.setFeeder(fill); }, [fill]);
 
-  // UX-9: Habitat opens after the second session or second catch
-  if (st.sessions < 2 && st.sightings.length < 2) {
-    return (
-      <div className="screen with-tabs" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
-        <Icon name="habitat" size={48} color="var(--fern)" />
-        <h2>Your habitat opens after your next outing.</h2>
-        <p className="muted small">Catch a second bird and they'll have somewhere to live.</p>
-      </div>
-    );
-  }
-
+  const hungry = aviary.filter((x) => hpNow(x) < 30).length;
   return (
     <div className="screen with-tabs">
-      <div className="row between"><h1 style={{ fontSize: 18 }}>Habitat</h1><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
+      <div className="row between"><h1 style={{ fontSize: 18 }}>Aviary</h1><span className="chip" aria-label={`${st.feathers} Feathers`}><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
       <div ref={boxRef} className="mt8" style={{ display: 'flex', justifyContent: 'center' }}>
         <canvas ref={ref} className="pix" style={{ width: (dims?.w ?? 0) * 2, maxWidth: '100%', border: '2px solid var(--ink)', boxShadow: '4px 4px 0 #000' }} role="img"
-          aria-label={`Habitat with ${placed.length} birds: ${placed.map((p) => speciesOf(p).common).join(', ') || 'none yet'}`} />
+          aria-label={`Aviary with ${aviary.length} birds and a feeder ${Math.round(fill * 100)}% full`} />
       </div>
-      <ul className="sr-only">{placed.map((p) => <li key={p.id}>{speciesOf(p).common}</li>)}</ul>
-      <div className="row between mt16 small"><span>Birds {placed.length}/12</span><span className="muted">{sceneLabel}</span><span>Decor {Object.keys(st.diorama.decor).length}/{DECOR_SLOTS.length}</span></div>
-      <div className="row mt8">
-        <button className="btn grow" onClick={() => setSheet('birds')}>Edit birds</button>
-        <button className="btn grow" onClick={() => setSheet('decor')} disabled={species < 25}>Decorate</button>
-      </div>
-      {species < 25 && <p className="small muted">Decor opens at 25 species ({species} so far). Feathers keep until then.</p>}
+      {gift > 0 && <div className="panel highlight small mt16" role="status">Your healthy birds brought you <b>{gift}</b> Feathers today.</div>}
+      {meals.length > 0 && <div className="small mt8" role="status" style={{ color: 'var(--lichen)' }}>{meals.map((m) => `${speciesOf(st.sightings.find((x) => x.id === m.id)!).common} ate (+${m.ate} HP)`).join(' · ')}</div>}
+
+      {/* the feeder */}
+      <section className="panel mt16" aria-label="Bird feeder">
+        <div className="row between"><span className="label">Bird feeder</span><span className="num small">{st.feeder.level}/{FEEDER_CAP}</span></div>
+        <div style={{ height: 16, background: '#000', border: '2px solid #000', position: 'relative', marginTop: 6 }} role="meter" aria-label="Feeder level" aria-valuemin={0} aria-valuemax={FEEDER_CAP} aria-valuenow={st.feeder.level}>
+          <i style={{ position: 'absolute', inset: '0 auto 0 0', width: `${fill * 100}%`, background: fill > 0.25 ? 'var(--warbler)' : 'var(--oriole)', transition: 'width 500ms steps(10)' }} />
+        </div>
+        <p className="small" style={{ margin: '8px 0', color: st.feeder.level === 0 ? 'var(--oriole)' : 'var(--stone)' }}>
+          {st.feeder.level === 0 ? (hungry ? `The feeder is empty and ${hungry} bird${hungry > 1 ? 's are' : ' is'} hungry. Fill it!` : 'The feeder is empty. Fill it before your birds get hungry.')
+            : `Hungry birds fly in and eat by themselves. About ${Math.max(1, Math.round(st.feeder.level / Math.max(1, aviary.length * 17)))} day(s) of food for ${aviary.length} bird${aviary.length === 1 ? '' : 's'}.`}
+        </p>
+        <div className="row">
+          <button className="btn primary grow" onClick={() => setSheet('fill')} disabled={st.feeder.level >= FEEDER_CAP}>Fill feeder</button>
+          <button className="btn grow" onClick={() => setSheet('shop')}>Buy food</button>
+        </div>
+        <div className="row small mt8" style={{ gap: 12, justifyContent: 'center' }}>
+          {(Object.keys(FOODS) as Food[]).map((f) => <span key={f}>{FOODS[f].icon} ×{st.items[f]}</span>)}
+          <span className="muted">in your pantry</span>
+        </div>
+      </section>
+
+      <section aria-label="Birds in your aviary">
+        <div className="row between mt16 mb8"><span className="label">In the Aviary · {aviary.length}/{AVIARY_MAX}{hungry ? ` · ${hungry} hungry` : ''}</span>
+          <button className="link" onClick={() => setSheet('box')}>Bird Box ({box.length}) ›</button></div>
+        {aviary.length === 0 && <p className="small muted">Photograph a real bird to bring your first pet home. Your partner is waiting here.</p>}
+        {aviary.slice().sort((a, b) => hpNow(a) - hpNow(b)).map((x) => {
+          const hp = hpNow(x);
+          return (
+            <button key={x.id} className="panel" style={{ width: '100%', padding: 8, display: 'flex', gap: 10, alignItems: 'center', textAlign: 'left', borderColor: hp < 30 ? 'var(--brick)' : undefined }}
+              onClick={() => nav.open({ name: 'species', id: x.speciesId ?? '_unknown', sightingId: x.id })}>
+              <span style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={speciesOf(x)} parts={x.sprite.parts} scale={2} mode={hp < 30 ? 'static' : 'idle'} /></span>
+              <span className="grow">
+                <span className="row between"><span className="name small">{speciesOf(x).common}</span><span className="px" style={{ fontSize: 10 }}>Lv{x.level ?? 5}</span></span>
+                <HpBar hp={hp} />
+                <span className="small" style={{ color: hp < 30 ? 'var(--oriole)' : 'var(--stone)' }}>{MOOD_LINE[mood(hp)]}</span>
+              </span>
+            </button>
+          );
+        })}
+      </section>
+
+      <div className="row between mt16 small"><span className="muted">{sceneLabel}</span><span>Decor {Object.keys(st.diorama.decor).length}/{DECOR_SLOTS.length - 1}</span></div>
+      <button className="btn block mt8" onClick={() => setSheet('decor')} disabled={species < 25}>Decorate</button>
+      {species < 25 && <p className="small muted">Decor opens at 25 species ({species} so far).</p>}
       <div className="label mt16 mb8">Scene</div>
       <div className="hscroll">
         {biomes.map(({ b, label, need }) => (
-          <button key={b} className="filter" aria-pressed={st.diorama.biome === b} disabled={species < need} onClick={() => setBiome(b)}>
-            {label}{species < need ? ` · ${need} sp.` : ''}
-          </button>
+          <button key={b} className="filter" aria-pressed={st.diorama.biome === b} disabled={species < need} onClick={() => setBiome(b)}>{label}{species < need ? ` · ${need} sp.` : ''}</button>
         ))}
       </div>
-      {sheet === 'birds' && (
-        <Sheet onClose={() => setSheet(null)} label="Choose birds for your habitat">
-          <h3 className="mb8">Birds in your habitat · {placed.length}/12</h3>
-          {st.sightings.filter(counts).length === 0 && <p className="small muted">Identified catches can live here.</p>}
-          {dedupe(st.sightings.filter(counts)).map((s) => (
-            <button key={s.id} className="srow" onClick={() => { if (!toggleHabitatBird(s.id)) nav.toast('Twelve is the limit. Move one out first.'); }} aria-pressed={st.diorama.birds.includes(s.id)}>
-              <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={1} mode="static" />
-              <span className="grow name">{displayName(speciesOf(s), s.region)}</span>
-              <span className="px small" style={{ color: st.diorama.birds.includes(s.id) ? 'var(--accent)' : 'var(--smoke)' }}>{st.diorama.birds.includes(s.id) ? 'Here' : 'Add'}</span>
+
+      {sheet === 'fill' && (
+        <Sheet onClose={() => setSheet(null)} label="Fill the feeder">
+          <div className="row between mb8"><h3>Fill the feeder</h3><span className="num small">{st.feeder.level}/{FEEDER_CAP}</span></div>
+          {(Object.keys(FOODS) as Food[]).map((f) => (
+            <button key={f} className="srow" disabled={st.items[f] <= 0 || st.feeder.level >= FEEDER_CAP} style={{ opacity: st.items[f] <= 0 ? 0.45 : 1 }}
+              onClick={() => { const n = fillFeeder(f); if (n) { sfx.page(); haptic(12); nav.toast(`Poured ${FOODS[f].name} into the feeder (+${n})`); setTimeout(runFeeder, 600); } }}>
+              <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
+              <span className="grow"><span className="name">{FOODS[f].name}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
+              <span className="num">×{st.items[f]}</span>
             </button>
           ))}
+          {(Object.keys(FOODS) as Food[]).every((f) => st.items[f] <= 0) && (
+            <>
+              <p className="small">Your pantry is empty. Buy food with the Feathers you earn by catching birds.</p>
+              <button className="btn primary block" onClick={() => setSheet('shop')}>Go to the food shop</button>
+            </>
+          )}
+        </Sheet>
+      )}
+      {sheet === 'shop' && (
+        <Sheet onClose={() => setSheet(null)} label="Food shop">
+          <div className="row between mb8"><h3>Food shop</h3><span className="chip"><Icon name="feather" size={12} color="var(--sky)" />{st.feathers}</span></div>
+          {(Object.keys(FOODS) as Food[]).map((f) => (
+            <div key={f} className="srow">
+              <span style={{ fontSize: 26 }} aria-hidden>{FOODS[f].icon}</span>
+              <span className="grow"><span className="name">{FOODS[f].name}</span> <span className="small muted">· have {st.items[f]}</span><br /><span className="small muted">{FOODS[f].desc}</span></span>
+              <button className="btn small primary" disabled={st.feathers < FOODS[f].price} onClick={() => { if (buyFood(f)) { sfx.select(); nav.toast(`Bought ${FOODS[f].name}`); } else sfx.error(); }}>
+                {FOODS[f].price} <Icon name="feather" size={10} color="var(--accent-ink)" />
+              </button>
+            </div>
+          ))}
+          <p className="small muted">Earn Feathers by photographing real birds (+12, or +20 for a new species), finishing quests, earning badges, and keeping your Aviary healthy.</p>
+          <button className="btn block" onClick={() => setSheet('fill')}>Fill the feeder</button>
+        </Sheet>
+      )}
+      {sheet === 'box' && (
+        <Sheet onClose={() => setSheet(null)} label="Bird Box">
+          <h3 className="mb8">Bird Box · {box.length}</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>Birds resting here don't get hungry. Up to {AVIARY_MAX} birds can live in the Aviary, where they eat from the feeder and earn you Feathers.</p>
+          {[...aviary, ...box].map((s) => {
+            const here = st.diorama.birds.includes(s.id);
+            return (
+              <div key={s.id} className="srow">
+                <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={1} mode="static" />
+                <span className="grow"><span className="name">{speciesOf(s).common}</span><br /><span style={{ display: 'block', width: 120 }}><HpBar hp={hpNow(s)} compact /></span></span>
+                <button className="btn small" onClick={() => { if (!toggleHabitatBird(s.id)) nav.toast(`The Aviary holds ${AVIARY_MAX} birds. Move one to the Bird Box first.`); }}>{here ? 'To box' : 'To aviary'}</button>
+              </div>
+            );
+          })}
         </Sheet>
       )}
       {sheet === 'decor' && (
@@ -176,35 +213,61 @@ function dedupe<T extends { speciesId: string | null; id: string }>(list: T[]): 
 export function YouTab() {
   const nav = useNav();
   const st = useGame((s) => s);
+  useEffect(() => { music('explore'); }, []);
   const rank = rankFor(st.xp);
   const streak = liveStreak(st.streak, dayKey(new Date()));
   const earned = Object.keys(st.badges).length;
+  const partner = st.partner ? allKnownSpecies().find((x) => x.id === st.partner!.speciesId) : null;
+  const region = getRegion(st.region);
+  const life = dedupe(st.sightings.filter(counts));
   return (
     <div className="screen with-tabs">
-      <div className="row between"><h1 style={{ fontSize: 18 }}>You</h1><button className="icon-btn" aria-label="Settings" onClick={() => nav.open({ name: 'settings' })}><Icon name="gear" size={22} /></button></div>
-      <div className="panel mt8">
-        <div className="label">Rank {rank.index + 1} of {RANKS.length}</div>
-        <h2 style={{ color: 'var(--accent)' }}>{rank.name}</h2>
-        <Meter value={rank.progress * 100} tone="sun" label="Progress to next rank" />
-        <div className="row between small mt8"><span className="num">{st.xp} XP</span><span className="muted">{rank.next ? `${rank.next.name} at ${rank.next.xp}` : 'Top rank'}</span></div>
+      <div className="row between"><h1 style={{ fontSize: 18 }}>Trainer</h1><button className="icon-btn" aria-label="Settings" onClick={() => nav.open({ name: 'settings' })}><Icon name="gear" size={22} /></button></div>
+      <div className="panel mt8" style={{ background: 'linear-gradient(135deg, #1B2229, #11151A 60%)', borderColor: 'var(--accent)' }}>
+        <div className="row between"><span className="label">Trainer card</span><span className="px small muted">ID {st.createdAt.replace(/\D/g, '').slice(2, 8)}</span></div>
+        <div className="row mt8" style={{ alignItems: 'flex-start', gap: 14 }}>
+          {partner && st.partner && <div style={{ background: 'var(--slate)', border: '2px solid #000' }}><Sprite species={partner} parts={st.partner.parts} scale={3} /></div>}
+          <div className="grow">
+            <h2 style={{ fontSize: 18 }}>{st.trainerName || 'Trainer'}</h2>
+            <div className="small muted">{region.flag} {regionLabel(st.region)}</div>
+            <div className="mt8"><span className="chip sun">Lv {rank.index + 1}</span> <span className="px small">{rank.name}</span></div>
+            {partner && <div className="small mt8">Partner: <b>{partner.common}</b> <Types sp={partner} /></div>}
+          </div>
+        </div>
+        <div className="mt16"><Meter value={rank.progress * 100} tone="sun" label="Progress to next level" /></div>
+        <div className="row between small mt8"><span className="num">{st.xp} XP</span><span className="muted">{rank.next ? `Lv ${rank.index + 2} at ${rank.next.xp}` : 'Max level'}</span></div>
       </div>
-      <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', padding: 8 }}>
-        <div><div className="num" style={{ fontSize: 20 }}>{speciesCount(st)}</div><div className="label" style={{ fontSize: 11 }}>Life list</div></div>
-        <div><div className="num" style={{ fontSize: 20 }}>{streak.days}</div><div className="label" style={{ fontSize: 11 }}>Streak{st.streak.freezes ? ` · ${st.streak.freezes}❄` : ''}</div></div>
-        <div><div className="num" style={{ fontSize: 20 }}>{st.sightings.length}</div><div className="label" style={{ fontSize: 11 }}>Catches</div></div>
+      <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', padding: 8 }}>
+        <div><div className="num" style={{ fontSize: 18 }}>{life.length}</div><div className="label" style={{ fontSize: 10 }}>Species</div></div>
+        <div><div className="num" style={{ fontSize: 18 }}>{st.sightings.length}</div><div className="label" style={{ fontSize: 10 }}>Catches</div></div>
+        <div><div className="num" style={{ fontSize: 18 }}>{streak.days}</div><div className="label" style={{ fontSize: 10 }}>Streak</div></div>
+        <div><div className="num" style={{ fontSize: 18 }}>{earned}</div><div className="label" style={{ fontSize: 10 }}>Badges</div></div>
       </div>
-      <button className="btn block" onClick={() => nav.open({ name: 'badges' })}>Badges · {earned}/{BADGES.length}</button>
-      <button className="btn block mt8" onClick={() => nav.open({ name: 'challenges' })}>Challenges</button>
+      <BadgeStrip />
+      <button className="btn block" onClick={() => nav.open({ name: 'badges' })}>Badge case · {earned}/{BADGES.length}</button>
+      <button className="btn block mt8" onClick={() => nav.open({ name: 'challenges' })}>Quests</button>
       <button className="btn block mt8" onClick={() => nav.open({ name: 'year' })}>Your year in birds</button>
-      <div className="label mt24 mb8">Life list</div>
-      {st.sightings.filter(counts).length === 0 && <p className="small muted">Your life list starts with your first identified catch.</p>}
-      {dedupe(st.sightings.filter(counts)).map((s) => (
+      <div className="label mt24 mb8">Life list · {life.length}</div>
+      {life.length === 0 && <p className="small muted">Your life list starts with your first identified catch.</p>}
+      {life.map((s) => (
         <button key={s.id} className="srow" onClick={() => nav.open({ name: 'species', id: s.speciesId! })}>
-          <Sprite species={speciesOf(s)} parts={s.sprite.parts} scale={1} mode="static" />
-          <span className="grow"><span className="name">{displayName(speciesOf(s), s.region)}</span><br /><span className="small muted">{new Date(s.capturedAt).toLocaleDateString()} · {s.region}</span></span>
+          <BirdThumb sp={speciesOf(s)} size={40} />
+          <span className="grow"><span className="name">{speciesOf(s).common}</span><br /><span className="small muted">{dexNo(s.dex)} · Lv {s.level ?? 5} · {new Date(s.capturedAt).toLocaleDateString()} · {getRegion(s.region).name}</span></span>
           <RarityTag rarity={s.rarity} showLabel={false} />
         </button>
       ))}
+    </div>
+  );
+}
+
+function BadgeStrip() {
+  const st = useGame((s) => s);
+  return (
+    <div className="panel" style={{ padding: 10 }}>
+      <div className="label mb8">Badge case</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, justifyItems: 'center' }}>
+        {BADGES.map((b) => <BadgeIcon key={b.id} icon={b.icon} earned={!!st.badges[b.id]} size={44} label={`${b.name}${st.badges[b.id] ? ', earned' : ', not yet earned'}`} />)}
+      </div>
     </div>
   );
 }
@@ -226,7 +289,7 @@ export function BadgesScreen() {
             const p = Math.min(b.goal, b.progress(st));
             return (
               <div key={b.id} className="panel" style={{ margin: 0, opacity: got ? 1 : 0.85, borderColor: got ? tierColor[b.tier] : undefined }}>
-                <div style={{ fontSize: 28, color: got ? tierColor[b.tier] : 'var(--smoke)' }} aria-hidden>{got ? '★' : '?'}</div>
+                <BadgeIcon icon={b.icon} earned={!!got} size={64} />
                 <div className="px" style={{ fontSize: 12 }}>{b.name}</div>
                 <div className="small muted">{b.desc}</div>
                 <div className="px mt8" style={{ fontSize: 11, color: tierColor[b.tier] }}>{b.tier}</div>
@@ -299,8 +362,8 @@ export function YearScreen() {
         <div className="panel small">
           <div>Species: <b className="num">{uniq.length}</b></div>
           <div>Catches: <b className="num">{mine.length}</b></div>
-          {rarest && <div>Rarest: {displayName(speciesOf(rarest), rarest.region)} (<RarityTag rarity={rarest.rarity} />)</div>}
-          {best && <div>Best photo: {displayName(speciesOf(best), best.region)} · {best.fieldcraft!.total}</div>}
+          {rarest && <div>Rarest: {speciesOf(rarest).common} (<RarityTag rarity={rarest.rarity} />)</div>}
+          {best && <div>Best photo: {speciesOf(best).common} · {best.fieldcraft!.total}</div>}
           {patch && <div>Most-birded patch: {patch[0]}</div>}
         </div>
         <p className="small muted">Generated on this phone. Nothing is sent anywhere.</p>

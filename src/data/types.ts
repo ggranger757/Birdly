@@ -39,6 +39,9 @@ export interface Species {
   sensitive?: boolean;
   occ: Record<string, Occurrence>;
   localNames?: Record<string, string>;
+  inatId?: number;            // live species from iNaturalist
+  photo?: string;             // reference photo (square) for live species
+  summary?: string;           // Wikipedia summary for live species (attributed in the UI)
 }
 
 export interface Region {
@@ -50,4 +53,5 @@ export interface Region {
   south: boolean;        // southern hemisphere → seasons flipped
   emblem?: string;       // species id of the state/provincial/national bird
   emblemLabel?: string;
+  flag?: string;
 }

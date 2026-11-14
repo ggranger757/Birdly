@@ -30,12 +30,15 @@ export interface Sighting {
   timesSeen: number;
   note: string;
   analysisMs?: number;
+  level?: number;                // collector-style level (5 + fieldcraft/5, +1 per repeat)
+  dex?: number;                  // regional BirdDex number at time of catch
+  pet?: { hp: number; at: string; resting?: boolean }; // health at `at`; drains only while living in the Aviary
 }
 
 export interface Settings {
   sound: boolean; haptics: boolean; grid: boolean;
   motion: 'system' | 'reduced' | 'full';
-  dyslexiaFont: boolean; refPhotos: boolean;
+  dyslexiaFont: boolean; refPhotos: boolean; music: boolean;
 }
 
 export interface ChallengeSlot { id: string; param?: string | number; claimed: boolean }
@@ -62,6 +65,12 @@ export interface GameState {
   firstCatchSeconds: number | null;
   installStartedAt: string;
   log: { t: string; e: string; d?: unknown }[]; // local analytics ring buffer (TEC-8), never leaves the device
+  trainerName: string;
+  partner: { speciesId: string; parts: number[] } | null;
+  speciesDefs: Record<string, Species>; // live species the player has caught, kept for offline use
+  items: { seeds: number; berries: number; worms: number }; // food bags in the pantry
+  feeder: { level: number };       // food points in the Aviary feeder
+  petDay: string | null;           // last day the aviary paid out Feathers
 }
 
 export const UNKNOWN: Species = {

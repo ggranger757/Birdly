@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useGame, speciesOf, updateNote, recordShare } from '../../app/store';
-import { displayName } from '../../data/species';
 import { photoURL } from '../../app/db';
 import { renderFrames } from '../../core/pixel/sprite';
 import { HEX, CLEAR, RGB } from '../../core/palette';
@@ -19,14 +18,14 @@ export function Spread({ sightingId }: { sightingId: string }) {
   useEffect(() => { photoURL(s?.photoId ?? null).then(setPhoto); }, [s?.photoId]);
   if (!s) return <div className="overlay"><TopBar title="Spread" onBack={nav.back} /><p className="screen">That sighting was removed.</p></div>;
   const sp = speciesOf(s);
-  const name = displayName(sp, s.region);
+  const name = sp.common;
 
   const share = async () => {
     setBusy(true);
     try {
       const blob = await renderShareCard(s, sp, name, photo, note);
       const file = new File([blob], `pixel-birder-${sp.id}.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${name} · PIXEL BIRDER` });
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${name} · BirdlyQuest` });
       else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); }
       recordShare(); sfx.sparkle();
     } catch { /* share sheet dismissed */ }
@@ -40,7 +39,7 @@ export function Spread({ sightingId }: { sightingId: string }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '2px solid var(--ink)', boxShadow: '4px 4px 0 #000' }}>
           <div className="paper" style={{ padding: 12, borderRight: '2px solid #cfc9b8', minHeight: 300 }}>
             <div className="taped tilt-l" style={{ width: '100%' }}>
-              {photo ? <img src={photo} alt="Your photo" style={{ aspectRatio: '1/1', objectFit: 'cover', imageRendering: s.mode === 'window' || s.mode === 'sketch' ? 'pixelated' : 'auto' }} />
+              {photo ? <img src={photo} alt="Your photo" style={{ aspectRatio: '1/1', objectFit: 'cover', imageRendering: s.mode === 'sketch' ? 'pixelated' : 'auto' }} />
                 : <div style={{ aspectRatio: '1/1', display: 'grid', placeItems: 'center', color: 'var(--smoke)', fontSize: 12 }}>Photo removed</div>}
             </div>
             <div className="mt16" style={{ color: 'var(--brick)', transform: 'rotate(-3deg)' }}>
@@ -60,7 +59,7 @@ export function Spread({ sightingId }: { sightingId: string }) {
           </div>
         </div>
         <button className="btn primary big block mt24" onClick={share} disabled={busy}>{busy ? 'Inking the card…' : 'Share spread'}</button>
-        <p className="small muted">Sharing is per item and makes an image. Nothing is uploaded by PIXEL BIRDER, and the card shows the region, never a location.</p>
+        <p className="small muted">Sharing is per item and makes an image. Nothing is uploaded by BirdlyQuest, and the card shows the region, never a location.</p>
       </div>
     </div>
   );
@@ -80,14 +79,14 @@ export async function renderShareCard(s: ReturnType<typeof Object>, sp: any, nam
   g.fillStyle = '#E8E4D8'; g.fillRect(60, 160, W - 120, 1000);
   g.fillStyle = '#cfc9b8'; g.fillRect(W / 2 - 1, 160, 2, 1000);
   g.fillStyle = '#000'; g.fillRect(60 + 12, 1160, W - 120, 12);
-  g.font = '44px Silkscreen'; g.fillStyle = '#F7F4E9'; g.fillText('PIXEL', 60, 110); g.fillStyle = '#F2C14E'; g.fillText('BIRDER', 260, 110);
+  g.font = '44px Silkscreen'; g.fillStyle = '#F7F4E9'; g.fillText('BIRDLY', 60, 110); g.fillStyle = '#C6FF1A'; g.fillText('QUEST', 300, 110);
   // photo, taped and tilted
   if (photo) {
     const img = await loadImg(photo);
     if (img) {
       g.save(); g.translate(290, 470); g.rotate(-0.026);
       g.fillStyle = '#F7F4E9'; g.fillRect(-200, -200, 400, 440);
-      g.imageSmoothingEnabled = s.mode !== 'window' && s.mode !== 'sketch';
+      g.imageSmoothingEnabled = s.mode !== 'sketch';
       g.drawImage(img, -186, -186, 372, 372);
       g.fillStyle = 'rgba(217,194,106,0.8)'; g.fillRect(-220, -214, 140, 30); g.fillRect(90, -214, 140, 30);
       g.restore();
@@ -107,7 +106,7 @@ export async function renderShareCard(s: ReturnType<typeof Object>, sp: any, nam
   g.font = 'italic 28px Inter'; g.fillStyle = '#4a4660'; if (sp.sci) g.fillText(sp.sci, W * 0.75 - 30, 790);
   g.font = '28px Inter'; g.fillStyle = '#14121F'; g.fillText(`${RARITY_META[s.rarity as keyof typeof RARITY_META].glyph} ${RARITY_META[s.rarity as keyof typeof RARITY_META].label}`, W * 0.75 - 30, 840);
   if (note) { g.font = 'italic 28px Inter'; g.fillStyle = '#2B2440'; wrap(g, note, W * 0.75 - 30, 910, 400, 38); }
-  g.textAlign = 'left'; g.font = '24px Silkscreen'; g.fillStyle = '#B9BCC9'; g.fillText('EVERY BIRD YOU SEE BECOMES A SPRITE', 60, 1260);
+  g.textAlign = 'left'; g.font = '24px Silkscreen'; g.fillStyle = '#B9BCC9'; g.fillText('CATCH REAL BIRDS WITH YOUR CAMERA', 60, 1260);
   return new Promise((res) => c.toBlob((b) => res(b!), 'image/png'));
 }
 

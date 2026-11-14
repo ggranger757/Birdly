@@ -1,14 +1,14 @@
 // GAM-1 XP, GAM-2 ranks, GAM-3 streaks. Pure.
 import { RARITY_META, Rarity } from './rarity';
 
-export type CatchMode = 'field' | 'window' | 'import' | 'sketch';
+export type CatchMode = 'field' | 'import' | 'sketch';
 
 export interface XpInput {
   newSpecies: boolean; regionFirst: boolean; fieldcraft: number; rarity: Rarity; streakDays: number; mode: CatchMode;
 }
 
 export function catchXp(i: XpInput): number {
-  const fc = i.mode === 'field' || i.mode === 'window' ? (i.fieldcraft / 100) * 30 : 0;
+  const fc = i.mode === 'field' ? (i.fieldcraft / 100) * 30 : 0;
   const base = 10 + (i.newSpecies ? 50 : 0) + (i.regionFirst ? 25 : 0) + fc;
   const streak = 1 + Math.min(0.3, i.streakDays * 0.02);
   const modeMult = i.mode === 'import' ? 0.5 : i.mode === 'sketch' ? 0.4 : 1;
