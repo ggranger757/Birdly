@@ -1,0 +1,21 @@
+# Decisions
+
+One line per meaningful choice, with the reason.
+
+- **Stack: React 19 + TS + Vite + vite-plugin-pwa, no PixiJS/Zustand/TanStack/Dexie/Supabase.** Static GitHub Pages hosting; Canvas 2D is plenty for 32×32 sprites; a 40-line store with useSyncExternalStore + idb-keyval keeps the shell at ~137 KB gz.
+- **No backend.** GitHub Pages is static; accounts, sync, RLS, push notifications and community challenges are out. ONB-8 "Save your journal?" became a backup-file prompt; the offline "N waiting to sync" chip became "saved on this phone".
+- **Palette slot mapping by nearest default colour, not luminance sort (PIX-5).** Luminance sort paints robins grey; pulling each species slot toward its nearest photo cluster plus a global light shift keeps anatomy readable while the photo still decides the colours.
+- **Sprites stored as 17 palette indices, frames regenerated deterministically.** Tiny storage, byte-identical on every device; `spriteHash` of frame 0 is kept for audits.
+- **Ink reserved for outlines; big black areas render as Plum.** Black birds otherwise vanish on dark pages.
+- **Window Mode species are filed as verified without a confirm sheet.** The game spawned the bird, so it is not a silent guess; keeps first catch at 6 taps.
+- **Window Mode palette comes from a clean plate (bird + scene average colour), the photo is the real scene crop.** Painted backgrounds would otherwise bleed into sprite colours.
+- **Craft badges count Field Mode photos only.** Window-mode Fieldcraft is partly synthetic (focus/patience), so it can't farm photo badges.
+- **"Not sure — identify later" instead of "you tell me".** There is no ID model; the honest copy says what happens.
+- **Hotspot/county badges re-expressed as patch/habitat badges.** No coordinates are stored, so hotspots and counties cannot be known.
+- **Call player links to Xeno-canto instead of embedding audio.** Recordings need per-file licences and an API key.
+- **Reference photos from iNaturalist (user request).** Only CC-licensed default photos, always attributed; cached by the service worker for offline.
+- **Owner-supplied layered backgrounds replace procedural scenes (user request).** 14 sets mapped to habitat × day phase; procedural pixel props (branches, wire, feeder, post) give birds perches in every scene. The art is outside FIELD 32 by owner choice; sprites and props stay in FIELD 32.
+- **UI theme: near-black neutrals with a neon yellow-green primary (#C6FF1A) (user request).** Sprite palette unchanged; "gold" badge tier and Legendary rarity keep FIELD 32 Sun.
+- **Mobile-only layout.** The app is a 480 px column; desktop shows a note to open it on a phone.
+- **Sun times from region centroid (NOAA approx.) placed relative to solar noon.** Fixes sunsets that wrap past UTC midnight; tested across longitudes.
+- **Decor opens at 25 species, second/third scenes at 10 (GAM-8).** As specified; Feathers accumulate meanwhile.
