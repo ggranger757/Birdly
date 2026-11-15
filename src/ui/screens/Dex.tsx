@@ -106,13 +106,17 @@ export function Dex() {
           return (
             <div key={c.id} role="listitem" className={`chapter ${chap === c.id ? 'on' : ''} ${done ? 'done' : ''}`}>
               <div className="chapter-card">
-              <button className="chapter-main" onClick={() => setChap(chap === c.id ? null : c.id)} aria-pressed={chap === c.id} aria-label={`${c.name}: ${n} of ${c.ids.length}. ${chap === c.id ? 'Showing only this goal' : 'Show only these birds'}`}>
-                <span className="name small">{c.name}</span>
-                <span className="small muted chapter-blurb">{c.blurb}</span>
-                <Meter value={n} max={c.ids.length} tone="sun" label={`${c.name} progress`} />
-                <span className="row between small"><span className="num">{n}/{c.ids.length}</span><span className="muted">{claimed ? '✓ Claimed' : `+${c.reward}`}</span></span>
-              </button>
-              {done && !claimed && <button className="btn small primary block" onClick={() => { if (claimChapter(c.id, c.reward)) { playClip('levelUp'); nav.toast(`${c.name} complete! +${c.reward} Feathers`); } }}>Claim +{c.reward}</button>}
+                <button className="chapter-main" onClick={() => setChap(chap === c.id ? null : c.id)} aria-pressed={chap === c.id} aria-label={`${c.name}: ${n} of ${c.ids.length}. ${chap === c.id ? 'Showing only this goal' : 'Show only these birds'}`}>
+                  <span className="name small chapter-name">{c.name}</span>
+                  <span className="small muted chapter-blurb">{c.blurb}</span>
+                  <Meter value={n} max={c.ids.length} tone="sun" label={`${c.name} progress`} />
+                </button>
+                <div className="chapter-foot small">
+                  <span className="num">{n}/{c.ids.length}</span>
+                  {done && !claimed
+                    ? <button className="btn small primary chapter-claim" onClick={() => { if (claimChapter(c.id, c.reward)) { playClip('levelUp'); nav.toast(`${c.name} complete! +${c.reward} Feathers`); } }}>Claim +{c.reward}</button>
+                    : <span className="muted">{claimed ? '✓ Claimed' : `+${c.reward} Feathers`}</span>}
+                </div>
               </div>
             </div>
           );

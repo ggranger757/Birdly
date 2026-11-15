@@ -592,3 +592,19 @@ section[aria-label], [data-tour], .jgrid { scroll-margin-top: 76px; }
 /* page subtitles wrap instead of being cut off */
 .page-sub { white-space: normal; overflow: visible; text-overflow: clip; line-height: 17px; }
 .page-header > .row { flex: none; }
+.particle { position: absolute; opacity: 0; animation: pburst 900ms cubic-bezier(.2,.7,.3,1) forwards; }
+@keyframes pburst { 0% { transform: translate(0, 0) scale(.4); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; } }
+.lens-shine { animation: lensshine 1.6s steps(4) infinite; }
+@keyframes lensshine { 50% { filter: brightness(1.25) drop-shadow(0 0 2px #F2C14E); } }
+/* goal cards: identical internal layout so bars and numbers line up */
+.chapter-main { display: grid !important; grid-template-rows: 20px 52px 12px; gap: 6px; align-content: start; padding: 8px 8px 4px !important; }
+.chapter-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chapter-blurb { min-height: 0 !important; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; line-height: 17px; }
+.chapter-foot { display: flex; justify-content: space-between; align-items: center; height: 40px; padding: 0 8px 6px; }
+.chapter-card .chapter-claim { margin: 0; min-height: 32px; padding: 4px 8px; }
+.home-auto { display: grid !important; grid-template-columns: 1fr 1fr; gap: 0; background: none !important; padding: 0; }
+.home-auto .home-thumb { aspect-ratio: 100 / 112; object-fit: cover; }
+.spot-pin { display: block; width: 30px; height: 34px; background: no-repeat center/contain url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 17' shape-rendering='crispEdges'><path fill='%23000' d='M4 0h7v1h2v2h1v6h-1v2h-2v2h-1v2H9v1H8v1H7v-1H6v-1H5v-2H4v-2H2V9H1V3h1V1h2z'/><path fill='%23C6FF1A' d='M4 1h7v1h1v1h1v6h-1v1h-1v2h-1v2H9v1H8v1H7v-1H6v-1H5v-2H4v-2H3V9H2V3h1V2h1z'/><path fill='%233F7A3F' d='M7 3h1v1h1v1h1v1H9v1h2v1H9v1h2v1H4V9h2V8H4V7h2V6H5V5h1V4h1z'/><path fill='%238C5A2B' d='M7 10h1v2H7z'/></svg>"); filter: drop-shadow(2px 2px 0 rgba(0,0,0,.5)); }
+.spot-pin.static { flex: none; width: 30px; height: 34px; }
+.spot-main { background: none; border: 0; padding: 0; text-align: left; color: inherit; min-width: 0; }
+.spot-row a.btn { text-decoration: none; }

@@ -3,7 +3,7 @@ import type * as Leaflet from 'leaflet';
 import { useNav } from '../nav';
 import { useGame, counts, refreshChallenges, setRegion, setMission, skipMission } from '../../app/store';
 import { getRegion, regionLabel } from '../../data/geo';
-import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs } from '../../data/provider';
+import { regionEntries, ensureRegion, onProviderChange, providerStatus, usingSeedFallback, nearbySightings, Sighting as Obs, birdingSpots, type Spot } from '../../data/provider';
 import { likelyNow } from '../../core/rarity';
 import { sunTimes, dayPhase, DayPhase } from '../../core/sun';
 import { liveStreak, dayKey, rankFor, trainerLevel } from '../../core/xp';
@@ -59,12 +59,15 @@ function km(a: [number, number], b: [number, number]) {
 export interface Feed { status: 'idle' | 'loading' | 'ok' | 'offline' | 'error'; list: Obs[]; hidden: number; at: number; error?: string; from: [number, number] | null; near: boolean }
 const REFRESH_MS = 5 * 60e3;
 
-function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: string; onOpen: (sp: Species) => void; onData: (f: Feed) => void; refreshKey: number }) {
+function BirdMap({ regionCode, onOpen, onData, refreshKey, onSpots, focusRef }: { regionCode: string; onOpen: (sp: Species) => void; onData: (f: Feed) => void; refreshKey: number; onSpots?: (s: Spot[] | null) => void; focusRef?: React.MutableRefObject<((s: Spot) => void) | null> }) {
   const lastQuery = useRef<{ lat: number; lng: number; radius: number; from: [number, number] | null } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<Leaflet.Map | null>(null);
   const L = useRef<typeof Leaflet | null>(null);
   const layer = useRef<Leaflet.LayerGroup | null>(null);
+  const spotLayer = useRef<Leaflet.LayerGroup | null>(null);
+  const spotMarkers = useRef<Map<number, Leaflet.Marker>>(new Map());
+  const spotsFor = useRef('');
   const me = useRef<Leaflet.Marker | null>(null);
   const [pos, setPos] = useState<[number, number] | null>(null);
   const [tilesFailed, setTilesFailed] = useState(false);
@@ -94,7 +97,9 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
       ro.observe(box.current!);
       setTimeout(() => m.invalidateSize(), 250); setTimeout(() => m.invalidateSize(), 1000);
       (m as any)._ro = ro;
+      spotLayer.current = Lf.layerGroup().addTo(m);
       layer.current = Lf.layerGroup().addTo(m);
+      if (focusRef) focusRef.current = (s: Spot) => { m.setView([s.lat, s.lng], Math.max(m.getZoom(), 13)); spotMarkers.current.get(s.id)?.openPopup(); };
       map.current = m;
       m.on('popupopen', (e: any) => {
         const btn = e.popup.getElement()?.querySelector('[data-sp]') as HTMLElement | null;
@@ -128,6 +133,24 @@ function BirdMap({ regionCode, onOpen, onData, refreshKey }: { regionCode: strin
            <button data-sp="${esc(o.sp.id)}" style="margin-top:8px;width:100%;min-height:40px;background:#C6FF1A;border:2px solid #000;font:12px Silkscreen,monospace;text-transform:uppercase">Open BirdDex entry</button>`);
       }
       setInfo({ n: list.length, hidden }); setStateMsg('ok');
+      // birding spots near the same centre (cached for a day)
+      const sk = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+      if (spotsFor.current !== sk) {
+        spotsFor.current = sk; onSpots?.(null);
+        birdingSpots(lat, lng).then((spots) => {
+          const sg = spotLayer.current; if (!sg) return; sg.clearLayers(); spotMarkers.current.clear();
+          const esc = (s: string) => s.replace(/[<>&"]/g, '');
+          for (const s of spots) {
+            const icon = Lf.divIcon({ className: '', html: `<span class="spot-pin" aria-hidden="true"></span>`, iconSize: [30, 34], iconAnchor: [15, 32] });
+            const dist = from ? ` · ${km(from, [s.lat, s.lng]).toFixed(1)} km` : '';
+            const mk = Lf.marker([s.lat, s.lng], { icon, title: s.name, zIndexOffset: -100 }).addTo(sg).bindPopup(
+              `<div><b>${esc(s.name)}</b><br>${s.species} bird species recorded${dist}<br><span style="color:#4a5560">Often seen: ${esc(s.top.join(', '))}</span></div>
+               <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat.toFixed(5)},${s.lng.toFixed(5)}&travelmode=walking" target="_blank" rel="noopener" style="display:block;margin-top:8px;text-align:center;min-height:40px;line-height:36px;background:#C6FF1A;color:#0A0C0F;border:2px solid #000;font:12px Silkscreen,monospace;text-transform:uppercase;text-decoration:none">Directions</a>`);
+            spotMarkers.current.set(s.id, mk);
+          }
+          onSpots?.(spots);
+        }).catch(() => onSpots?.([]));
+      }
       onData({ status: 'ok', list, hidden, at: Date.now(), from, near: !!from });
     } catch (e) {
       setStateMsg('error');
@@ -184,8 +207,10 @@ export function Explore() {
   const [wx, setWx] = useState<Weather | null>(null);
   const [pickRegion, setPickRegion] = useState(false);
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<'latest' | 'likely'>('latest');
+  const [view, setView] = useState<'latest' | 'likely' | 'spots'>('latest');
   const [feed, setFeed] = useState<Feed>({ status: 'idle', list: [], hidden: 0, at: 0, from: null, near: false });
+  const [spots, setSpots] = useState<Spot[] | null>(null);
+  const focusSpot = useRef<((s: Spot) => void) | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [, tickNow] = useState(0);
   useEffect(() => { const t = setInterval(() => tickNow((x) => x + 1), 30000); return () => clearInterval(t); }, []);
@@ -203,7 +228,7 @@ export function Explore() {
 
   return (
     <div className="explore">
-      <BirdMap regionCode={st.region} onOpen={openSp} onData={setFeed} refreshKey={refreshKey} />
+      <BirdMap regionCode={st.region} onOpen={openSp} onData={setFeed} refreshKey={refreshKey} onSpots={setSpots} focusRef={focusSpot} />
       {/* HUD: who you are, streak, money */}
       <div className="hud" style={{ right: 110 }}>
         <button className="chip" onClick={() => nav.setTab('you')} aria-label={`Trainer ${st.trainerName}, level ${trainerLevel(st.xp).level}`}>
@@ -233,8 +258,9 @@ export function Explore() {
           </div>
           <div className="row" style={{ gap: 8, marginBottom: 8 }}>
             <div className="grow"><Segmented label="Show" value={view} onChange={setView} options={[
-              { id: 'latest', label: `Latest${feed.list.length ? ` · ${feed.list.length}` : ''}` },
-              { id: 'likely', label: 'Likely here' },
+              { id: 'latest', label: 'Latest' },
+              { id: 'likely', label: 'Likely' },
+              { id: 'spots', label: 'Spots' },
             ]} /></div>
             <button className="btn small" style={{ minHeight: 44 }} onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'All'}</button>
           </div>
@@ -249,7 +275,25 @@ export function Explore() {
                   </div>
                 );
           })()}
-          {view === 'latest' ? (
+          {view === 'spots' ? (
+            <div className="spots">
+              <p className="small muted" style={{ marginTop: 0 }}>Parks, refuges and preserves near you, ranked by how many bird species people have recorded there.</p>
+              {spots === null && <p className="small muted">Finding birding spots…</p>}
+              {spots && spots.length === 0 && <p className="small muted">No well-known birding spots found nearby. Try Near me, or zoom to a greener area.</p>}
+              {(spots ?? []).slice(0, open ? 20 : 5).map((s) => (
+                <div key={s.id} className="srow spot-row">
+                  <span className="spot-pin static" aria-hidden />
+                  <button className="grow spot-main" onClick={() => { sfx.select(); focusSpot.current?.(s); }} aria-label={`${s.name}: ${s.species} bird species recorded. Show on map`}>
+                    <span className="name">{s.name}</span><br />
+                    <span className="small" style={{ color: 'var(--lichen)' }}>{s.species} bird species{feed.from ? ` · ${km(feed.from, [s.lat, s.lng]).toFixed(1)} km` : ''}</span><br />
+                    <span className="small muted">Often seen: {s.top.join(', ')}</span>
+                  </button>
+                  <a className="btn small" href={directions(s.lat, s.lng)} target="_blank" rel="noopener" aria-label={`Directions to ${s.name}`}>Go</a>
+                </div>
+              ))}
+              {spots && <p className="small muted">Places from iNaturalist; counts are research-grade bird observations.</p>}
+            </div>
+          ) : view === 'latest' ? (
             feed.list.length === 0 ? (
               <p className="small muted" style={{ margin: '4px 0' }}>
                 {feed.status === 'ok' ? 'No public bird reports here in the last 30 days. Tap Near me, or try a busier area.' : feed.status === 'error' ? 'Live sightings are unavailable right now.' : 'Looking for the latest reports…'}

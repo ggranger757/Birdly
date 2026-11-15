@@ -180,10 +180,10 @@ export function HabitatTab() {
           <div className="section-title"><span>Bird Homes</span><span className="small muted" style={{ textTransform: 'none', fontFamily: 'var(--body)' }}>{Object.values(SCENES).filter((h) => h.level <= lv).length}/{Object.keys(SCENES).length} unlocked</span></div>
           <div className="home-strip" role="radiogroup" aria-label="Bird Homes" ref={stripRef}>
             <button role="radio" className={`home-card auto ${!st.diorama.home ? 'on' : ''}`} aria-checked={!st.diorama.home} onClick={() => { sfx.select(); haptic(8); setHome(undefined); }}>
-              <span className="home-auto" aria-hidden>☀ → ☾</span>
-              <span className="small">Changes with the day</span>
+              <span className="home-auto" aria-hidden><HomeThumb id="skyday" /><HomeThumb id="dusk" /></span>
+              <span className="small">Day &amp; night (default)</span>
             </button>
-            {Object.values(SCENES).map((sc) => {
+            {Object.values(SCENES).slice().sort((a, b) => a.level - b.level).map((sc) => {
               const locked = sc.level > lv, on = st.diorama.home === sc.id;
               return (
                 <button key={sc.id} role="radio" className={`home-card ${on ? 'on' : ''} ${locked ? 'locked' : ''}`} aria-checked={on} disabled={locked}

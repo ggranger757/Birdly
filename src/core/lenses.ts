@@ -3,6 +3,7 @@
 export type LensId = string;
 export type LensTier = 'common' | 'rare' | 'epic' | 'legendary';
 export type LensPattern = 'single' | 'double' | 'ring3' | 'ring6' | 'swarm' | 'rain' | 'orbit' | 'rainbow';
+export type ParticleShape = 'star' | 'heart' | 'drop' | 'leaf' | 'snow' | 'diamond' | 'bolt' | 'feather' | 'sparkle' | 'ring';
 type Sheet = 'ripple' | 'bubble' | 'ember' | 'arcane' | 'phantom';
 
 export const SHEETS: Record<Sheet, { src: string; fw: number; fh: number; frames: number; fps: number }> = {
@@ -23,6 +24,8 @@ export interface Lens {
   /** CSS filter applied to the effect (recolours the sheet) */
   filter?: string;
   pattern: LensPattern;
+  /** pixel particles that burst out with the effect */
+  particles?: { shape: ParticleShape; colors: string[]; count: number };
   /** capsule colours: A = shell, a = shell shade, g = glass */
   colors: { A: string; a: string; g: string };
 }
@@ -87,6 +90,22 @@ const DEFS: Def[] = [
 
 export const LENSES: Record<LensId, Lens> = Object.fromEntries(DEFS.map(([id, name, tier, power, price, sheet, pattern, color, desc, filter]) =>
   [id, { id, name, tier, power, price, desc, pattern, filter, fx: SHEETS[sheet], level: TIER_META[tier].level, colors: capsule(color) }]));
+const P: Record<string, [ParticleShape, string[], number]> = {
+  dewdrop: ['drop', ['#7FD9A8', '#C9F7E2'], 8], sunbeam: ['sparkle', ['#F2C14E', '#FFF3B0'], 8], pebble: ['diamond', ['#9AA3AD', '#D4D9DE', '#6B7480'], 8],
+  meadow: ['leaf', ['#8DC63F', '#3F7A3F', '#C8E67A'], 10], bubble: ['ring', ['#7CCBFF', '#D8F1FF'], 8], cinder: ['sparkle', ['#FF9A3C', '#FFD08A'], 8],
+  lilac: ['heart', ['#D7A6FF', '#F2D9FF'], 10], tidepool: ['drop', ['#3FC1C9', '#9FE8EC', '#1F7F86'], 10], jade: ['leaf', ['#3FAF7A', '#9FE0BF'], 10],
+  frost: ['snow', ['#9FD8FF', '#FFFFFF'], 12], coral: ['heart', ['#FF8FA3', '#FFC2CD', '#FF5C7A'], 12], ember: ['sparkle', ['#FF9A3C', '#FFE08A'], 10],
+  twilight: ['star', ['#7B6CD9', '#C9C2FF'], 10], blaze: ['sparkle', ['#FF6A2B', '#FFC23C', '#FF3B1F'], 14], storm: ['bolt', ['#FFE14D', '#FFFFFF'], 10],
+  sunflare: ['star', ['#FFC23C', '#FFF0A8'], 12], arcane: ['star', ['#B98AFF', '#E6D4FF'], 12], nebula: ['star', ['#7C8CFF', '#FF8FD8', '#C9D7FF'], 14],
+  aurora: ['sparkle', ['#5FE3B8', '#8FB8FF', '#FF9CF2'], 14], inferno: ['sparkle', ['#E8402B', '#FF8A3C', '#FFD23C'], 16], glacier: ['snow', ['#BFEFFF', '#FFFFFF', '#7FC8F0'], 14],
+  wisp: ['ring', ['#9CFFD6', '#E0FFF3'], 12], starfall: ['star', ['#FFE36B', '#FFFFFF'], 16], moonlight: ['star', ['#E9ECF5', '#B6C0C9'], 12], phantom: ['heart', ['#FF6BD6', '#FFC9F1'], 12],
+  phoenix: ['feather', ['#FF5A1F', '#FFC23C', '#FF2B4E'], 16], leviathan: ['drop', ['#1F8FBF', '#7FD3FF', '#0E4F7A'], 16], dragon: ['diamond', ['#2FBF71', '#9FF0C4', '#F2C14E'], 16],
+  eclipse: ['ring', ['#FFFFFF', '#2B2B3A', '#F2C14E'], 14], galaxy: ['star', ['#6A5BFF', '#FF8FD8', '#8FE3FF', '#FFFFFF'], 18], thunderbird: ['bolt', ['#FFE14D', '#FFFFFF', '#F2A33C'], 16],
+  celestial: ['star', ['#C9D7FF', '#FFE36B', '#FF9CF2', '#8FE3FF'], 18], prism: ['diamond', ['#FF5C7A', '#FFC23C', '#7FE37F', '#5AB8FF', '#B98AFF'], 20],
+  merlin: ['feather', ['#F2C14E', '#FFF3B0', '#B98AFF'], 20],
+};
+for (const [id, [shape, colors, count]] of Object.entries(P)) if (LENSES[id]) LENSES[id].particles = { shape, colors, count };
+
 export const LENS_ORDER: LensId[] = DEFS.map((d) => d[0]);
 export const LENS_TIERS: LensTier[] = ['common', 'rare', 'epic', 'legendary'];
 export const lensOf = (id?: string): Lens => (id && LENSES[id]) || LENSES.ripple;

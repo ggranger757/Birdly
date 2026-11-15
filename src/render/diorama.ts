@@ -18,6 +18,10 @@ export interface SceneDef {
 }
 
 export const SCENES: Record<string, SceneDef> = {
+  skyday: { id: 'skyday', label: "Sky meadow", level: 1, layers: 1, w: 384, h: 224, ground: 214, props: ['branchL', 'post'] },
+  crimson: { id: 'crimson', label: "Crimson castle", level: 9, layers: 1, w: 384, h: 216, ground: 206, props: ['branchL', 'branchR'] },
+  moonkeep: { id: 'moonkeep', label: "Moonlit keep", level: 13, layers: 1, w: 384, h: 216, ground: 208, props: ['branchL', 'branchR'] },
+  chapel: { id: 'chapel', label: "Ivy chapel", level: 17, layers: 1, w: 281, h: 245, ground: 230, props: ['branchL', 'post'] },
   valley: { id: 'valley', label: "Valley pond", level: 1, layers: 6, w: 768, h: 300, ground: 286, water: [246, 264, 350, 620], props: ['branchL', 'post'] },
   pine: { id: 'pine', label: "Pine forest", level: 1, layers: 14, w: 640, h: 300, ground: 260, props: ['branchL', 'branchR'] },
   c2: { id: 'c2', label: "High street", level: 1, layers: 6, w: 480, h: 270, ground: 224, props: ['branchL', 'wire', 'feeder'] },
@@ -76,6 +80,9 @@ const BY_PHASE: Record<Habitat, Record<DayPhase, [string, string?]>> = {
   woodland: { dawn: ['n1'], morning: ['nfb'], day: ['pine'], golden: ['b3', 'rgba(255,170,60,0.14)'], dusk: ['dusk'], night: ['nfa'] },
   water: { dawn: ['valley', 'rgba(255,140,120,0.18)'], morning: ['valley'], day: ['n3'], golden: ['n3', 'rgba(255,150,40,0.18)'], dusk: ['valley', 'rgba(110,40,100,0.34)'], night: ['v_tundra', 'rgba(6,8,30,0.45)'] },
 };
+
+/** The default Bird Home for a time of day. */
+export const defaultHome = (phase: DayPhase) => (phase === 'dusk' || phase === 'night' ? 'dusk' : 'skyday');
 
 export function sceneFor(biome: Habitat, phase: DayPhase): SceneDef {
   const [id, tint] = BY_PHASE[biome][phase];
@@ -282,7 +289,10 @@ export class Diorama {
   birds: Bird[] = [];
   onChange?: () => void;
   constructor(private canvas: HTMLCanvasElement, biome: Habitat, private phase: DayPhase, private opts: DioramaOpts) {
-    this.scene = opts.sceneId && SCENES[opts.sceneId] ? { ...SCENES[opts.sceneId], tint: phase === 'night' && !/night|neon|tundra|nfa/.test(opts.sceneId) ? 'rgba(6,8,30,0.35)' : undefined } : sceneFor(biome, phase);
+    // no chosen home: the default changes with the day (Sky meadow by day, Mountain dusk at dusk and night)
+    const id = opts.sceneId && SCENES[opts.sceneId] ? opts.sceneId : defaultHome(phase);
+    this.scene = { ...SCENES[id], tint: id === opts.sceneId && phase === 'night' && !/night|neon|tundra|nfa|moonkeep|dusk/.test(id) ? 'rgba(6,8,30,0.35)' : undefined };
+    void biome;
     this.W = opts.viewW;
     this.H = Math.min(opts.viewH, this.scene.h);
     canvas.width = this.W; canvas.height = this.H;

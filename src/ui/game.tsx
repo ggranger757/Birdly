@@ -73,32 +73,78 @@ export function Types({ sp }: { sp: Species }) {
 export const dexNo = (n?: number) => (n ? `#${String(n).padStart(3, '0')}` : '#???');
 
 // The Snap Capsule: an original film-canister capture device (not a ball). 12×16 pixel art.
-const CAPSULE = [
-  '..aaaaaaaa..',
-  '.aAAAAAAAAa.',
-  '.aAAAAAAAAa.',
-  '.kkkkkkkkkk.',
-  '.wwwwwwwwww.',
-  '.wkkkkkkkkw.',
-  '.wkLLLLLLkw.',
-  '.wkLeeeeLkw.',
-  '.wkLeggeLkw.',
-  '.wkLeggeLkw.',
-  '.wkLeeeeLkw.',
-  '.wkLLLLLLkw.',
-  '.wkkkkkkkkw.',
-  '.wwwwwwwwww.',
-  '.kkkkkkkkkk.',
-  '..kkkkkkkk..',
-];
-const CAP_COL: Record<string, string> = { a: '#8DB80F', A: '#C6FF1A', k: '#0A0C0F', w: '#2F3A45', L: '#B6C0C9', e: '#1B2229', g: '#C6FF1A' };
+// Lens bodies: one shape per tier (16×16). A shell · a shade · k outline · w body · L lens ring · e lens dark · g glass · t trim · s gem
+const BODIES: Record<string, string[]> = {
+  common: [
+    '...aaaaaaaa.....', '..aAAAAAAAAa....', '..aAAAAAAAAa....', '..kkkkkkkkkk....', '..wwwwwwwwww....', '..wkkkkkkkkw....', '..wkLLLLLLkw....', '..wkLeeeeLkw....',
+    '..wkLeggeLkw....', '..wkLeggeLkw....', '..wkLeeeeLkw....', '..wkLLLLLLkw....', '..wkkkkkkkkw....', '..wwwwwwwwww....', '..kkkkkkkkkk....', '...kkkkkkkk.....',
+  ].map((r) => `.${r.slice(0, 15)}`),
+  rare: [
+    '................', '....aaaaaaaa....', '...aAAAAAAAAa...', '...aAAAAAAAAa...', '.ttkkkkkkkkkktt.', '.twwwwwwwwwwwwt.', '..wkkkkkkkkkkw..', '..wkLLLLLLLLkw..',
+    '..wkLeeeeeeLkw..', '..wkLeggggeLkw..', '..wkLeggggeLkw..', '..wkLeeeeeeLkw..', '..wkLLLLLLLLkw..', '..wkkkkkkkkkkw..', '..wwwwwwwwwwww..', '...kkkkkkkkkk...',
+  ],
+  epic: [
+    '.......ss.......', '......aAAa......', '....aaAAAAaa....', 't..aAAAAAAAAa..t', 'tt.kkkkkkkkkk.tt', 'ttwwwwwwwwwwwwtt', '.twkkkkkkkkkkwt.', '..wkLLLLLLLLkw..',
+    '..wkLeeeeeeLkw..', '..wkLegggseLkw..', '..wkLeggggeLkw..', '..wkLeeeeeeLkw..', '..wkLLLLLLLLkw..', '..wkkkkkkkkkkw..', '...wwwwwwwwww...', '....kkkkkkkk....',
+  ],
+  legendary: [
+    '...t.s..s..s.t..', '...tttttttttt...', '..aAAAAAAAAAAa..', '..aAAAAsAAAAAa..', 'ttkkkkkkkkkkkktt', 'twwwwwwwwwwwwwwt', '.twkkkkkkkkkkwt.', '..wkLLLLLLLLkw..',
+    '..wkLeeeeeeLkw..', '..wkLeggsgeLkw..', '..wkLeggggeLkw..', '..wkLeeeeeeLkw..', '..wkLLLLLLLLkw..', '..wkkkkkkkkkkw..', '...tttttttttt...', '....kkkkkkkk....',
+  ],
+};
+const BODY_COL: Record<string, Record<string, string>> = {
+  common: { k: '#0A0C0F', w: '#2F3A45', L: '#B6C0C9', e: '#1B2229', t: '#B6C0C9', s: '#FFFFFF' },
+  rare: { k: '#0A0C0F', w: '#3A5A80', L: '#DDE6F0', e: '#14243A', t: '#C9D1D8', s: '#FFFFFF' },
+  epic: { k: '#120A1F', w: '#4A2A78', L: '#E6D4FF', e: '#1E1033', t: '#B48BE0', s: '#FFFFFF' },
+  legendary: { k: '#2A1A04', w: '#8A6414', L: '#FFE7A0', e: '#3A2408', t: '#F2C14E', s: '#FF3D5E' },
+};
+const CAP_COL: Record<string, string> = { a: '#8DB80F', A: '#C6FF1A', g: '#C6FF1A' };
 export function Capsule({ size = 48, glow, className, style, lens }: { size?: number; glow?: boolean; className?: string; style?: React.CSSProperties; lens?: string }) {
-  const tint = lens ? lensOf(lens).colors : null;
-  const col = (ch: string) => (tint && (ch === 'A' || ch === 'a' || ch === 'g') ? tint[ch as 'A' | 'a' | 'g'] : CAP_COL[ch]);
+  const L = lens ? lensOf(lens) : null;
+  const tier = L?.tier ?? 'common';
+  const body = BODIES[tier], bc = BODY_COL[tier];
+  const col = (ch: string) => (L && (ch === 'A' || ch === 'a' || ch === 'g') ? L.colors[ch as 'A' | 'a' | 'g'] : CAP_COL[ch] ?? bc[ch]);
   return (
-    <svg width={size * 0.75} height={size} viewBox="0 0 12 16" shapeRendering="crispEdges" className={className} style={style} aria-hidden>
-      {CAPSULE.flatMap((row, y) => [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={glow && ch === 'g' ? '#F7F4E9' : col(ch)} />)))}
+    <svg width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" className={`${className ?? ''} ${tier === 'legendary' ? 'lens-shine' : ''}`} style={style} aria-hidden>
+      {body.flatMap((row, y) => [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={glow && ch === 'g' ? '#F7F4E9' : col(ch)} />)))}
     </svg>
+  );
+}
+
+// little pixel shapes for lens particle bursts (7×7)
+const SHAPES: Record<string, string[]> = {
+  star: ['...x...', '..xxx..', 'xxxxxxx', '.xxxxx.', '..xxx..', '.xx.xx.', 'x.....x'],
+  heart: ['.xx.xx.', 'xxxxxxx', 'xxxxxxx', '.xxxxx.', '..xxx..', '...x...', '.......'],
+  drop: ['...x...', '..xxx..', '..xxx..', '.xxxxx.', '.xxxxx.', '..xxx..', '.......'],
+  leaf: ['.....xx', '...xxxx', '..xxxx.', '.xxxx..', '.xxx...', 'x......', '.......'],
+  snow: ['...x...', '.x.x.x.', '..xxx..', 'xxxxxxx', '..xxx..', '.x.x.x.', '...x...'],
+  diamond: ['...x...', '..xxx..', '.xxxxx.', 'xxxxxxx', '.xxxxx.', '..xxx..', '...x...'],
+  bolt: ['....xx.', '...xx..', '..xxxx.', '....xx.', '...xx..', '..xx...', '.x.....'],
+  feather: ['.....xx', '....xxx', '...xxx.', '..xxx..', '.xxx...', '.x.....', 'x......'],
+  sparkle: ['...x...', '...x...', '..x.x..', 'xx...xx', '..x.x..', '...x...', '...x...'],
+  ring: ['..xxx..', '.x...x.', 'x.....x', 'x.....x', 'x.....x', '.x...x.', '..xxx..'],
+};
+function PixelShape({ shape, color, size }: { shape: string; color: string; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 7 7" shapeRendering="crispEdges" aria-hidden style={{ display: 'block' }}>
+      {SHAPES[shape].flatMap((r, y) => [...r].map((c, x) => (c === 'x' ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={color} /> : null)))}
+    </svg>
+  );
+}
+/** A burst of pixel particles flying out from the bird. */
+export function ParticleBurst({ shape, colors, count, radius = 90, size = 14 }: { shape: string; colors: string[]; count: number; radius?: number; size?: number }) {
+  if (reducedMotionNow()) return null;
+  return (
+    <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
+      {Array.from({ length: count }, (_, i) => {
+        const a = (i / count) * Math.PI * 2 + (i % 2) * 0.3, r = radius * (0.65 + ((i * 37) % 10) / 28);
+        return (
+          <div key={i} className="particle" style={{ ['--dx' as any]: `${Math.cos(a) * r}px`, ['--dy' as any]: `${Math.sin(a) * r}px`, animationDelay: `${(i % 4) * 40}ms`, left: -size / 2, top: -size / 2 }}>
+            <PixelShape shape={shape} color={colors[i % colors.length]} size={size + (i % 3) * 3} />
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -189,7 +235,12 @@ export function LensFx({ lens, size = 140 }: { lens?: string; size?: number }) {
         at(x * size / 140, y * size / 140, sc, i, { delay: i * 60, cls: 'fx-rise', style: { animationDelay: `${i * 60}ms` } }));
     }
   }
-  return <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>{body}</div>;
+  return (
+    <div aria-hidden style={{ position: 'relative', width: 0, height: 0 }}>
+      {body}
+      {L.particles && <ParticleBurst {...L.particles} radius={size * 0.62} size={L.tier === 'legendary' ? 16 : L.tier === 'epic' ? 14 : 12} />}
+    </div>
+  );
 }
 
 /** Collector-style HP bar: green → amber → red. */

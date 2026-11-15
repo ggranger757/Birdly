@@ -281,3 +281,39 @@ export function taxonSummary(id: number): Promise<string | null> {
   }
   return summaries.get(id)!;
 }
+
+// ─── birding spots: parks, refuges and preserves near you (iNaturalist community places) ───
+export interface Spot { id: number; name: string; lat: number; lng: number; species: number; top: string[] }
+const NATURE = /\b(park|refuge|preserve|reserve|sanctuary|marsh|wetlands?|lake|pond|reservoir|arboretum|garden|forest|woods|nature|trail|island|beach|creek|river|bay|swamp|meadow|prairie|hotspot|wildlife|conservation|greenway|valley)\b/i;
+const NOISE = /usgs|quad|yard|squad|university|college|campus|county|zip|city of|school|census|grid|block|circle|bioblitz|challenge|project/i;
+export async function birdingSpots(lat: number, lng: number, max = 10): Promise<Spot[]> {
+  const key = `spots:${lat.toFixed(2)},${lng.toFixed(2)}`;
+  try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && Date.now() - c.at < 864e5) return c.list; } catch { /* ignore */ }
+  const boxes = [[0.06, 0.08], [0.16, 0.2]]; // close by first, then a wider ring
+  const found = new Map<number, { id: number; name: string; lat: number; lng: number; d: number }>();
+  for (const [dy, dx] of boxes) {
+    const j = await getJSON(`https://api.inaturalist.org/v1/places/nearby?nelat=${lat + dy}&nelng=${lng + dx}&swlat=${lat - dy}&swlng=${lng - dx}&per_page=50`);
+    for (const p of [...(j.results?.community ?? []), ...(j.results?.standard ?? [])]) {
+      if (!p.location || !NATURE.test(p.name) || NOISE.test(p.name) || (p.bbox_area ?? 1) > 0.03) continue;
+      const [plat, plng] = String(p.location).split(',').map(Number);
+      const d = Math.hypot((plat - lat) * 111, (plng - lng) * 111 * Math.cos(lat * Math.PI / 180));
+      if (!found.has(p.id)) found.set(p.id, { id: p.id, name: p.name.replace(/\s*\(.*?\)\s*$/, '').trim(), lat: plat, lng: plng, d });
+    }
+    if (found.size >= max) break;
+  }
+  // drop near-duplicates (same name), keep the closest, then count birds recorded at each
+  const byName = new Map<string, { id: number; name: string; lat: number; lng: number; d: number }>();
+  for (const s of [...found.values()].sort((a, b) => a.d - b.d)) { const k = s.name.toLowerCase().replace(/[^a-z]/g, ''); if (!byName.has(k)) byName.set(k, s); }
+  const cands = [...byName.values()].slice(0, max);
+  const list: Spot[] = [];
+  for (const s of cands) {
+    try {
+      const c = await getJSON(`https://api.inaturalist.org/v1/observations/species_counts?place_id=${s.id}&taxon_id=3&quality_grade=research&per_page=3&locale=en`);
+      const species = c.total_results ?? 0;
+      if (species >= 5) list.push({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, species, top: (c.results ?? []).map((r: any) => r.taxon?.preferred_common_name ?? r.taxon?.name).filter(Boolean) });
+    } catch { /* skip this one */ }
+  }
+  list.sort((a, b) => b.species - a.species);
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), list })); } catch { /* ignore */ }
+  return list;
+}
