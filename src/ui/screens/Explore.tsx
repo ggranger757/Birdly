@@ -206,7 +206,7 @@ export function Explore() {
   const phase = dayPhase(now, sunTimes(now, region.lat, region.lng));
   const [wx, setWx] = useState<Weather | null>(null);
   const [pickRegion, setPickRegion] = useState(false);
-  const [open, setOpen] = useState(false);
+  const open = false; // the drawer has one size: no All / Less expansion
   const [view, setView] = useState<'latest' | 'likely' | 'spots'>('latest');
   const [feed, setFeed] = useState<Feed>({ status: 'idle', list: [], hidden: 0, at: 0, from: null, near: false });
   const [spots, setSpots] = useState<Spot[] | null>(null);
@@ -238,8 +238,8 @@ export function Explore() {
         <FeatherChip label={false} />
       </div>
 
-      <div className="drawer" style={{ height: open ? '72%' : 276 }}>
-        <button className="grab" onClick={() => { sfx.move(); setOpen(!open); }} aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} style={{ border: 0, minHeight: 4, padding: 0 }} />
+      <div className="drawer" style={{ height: 276 }}>
+        <span className="grab" aria-hidden style={{ display: 'block' }} />
         <div className="drawer-body">
           <div className="row between" style={{ marginBottom: 8 }}>
             <button className="row" style={{ background: 'none', border: 0, padding: 0, color: 'inherit', textAlign: 'left', minHeight: 44 }} onClick={() => { sfx.tap(); setPickRegion(true); }} aria-label={`Region ${regionLabel(st.region)}. Change`}>
@@ -262,7 +262,6 @@ export function Explore() {
               { id: 'likely', label: 'Likely' },
               { id: 'spots', label: 'Spots' },
             ]} /></div>
-            <button className="btn small" style={{ minHeight: 44 }} onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'All'}</button>
           </div>
           {view === 'latest' && <MissionCard feed={feed} caught={caught} />}
           {view === 'likely' && (() => {
@@ -280,7 +279,7 @@ export function Explore() {
               <p className="small muted" style={{ marginTop: 0 }}>Parks, refuges and preserves near you, ranked by how many bird species people have recorded there.</p>
               {spots === null && <p className="small muted">Finding birding spots…</p>}
               {spots && spots.length === 0 && <p className="small muted">No well-known birding spots found nearby. Try Near me, or zoom to a greener area.</p>}
-              {(spots ?? []).slice(0, open ? 20 : 5).map((s) => (
+              {(spots ?? []).map((s) => (
                 <div key={s.id} className="srow spot-row">
                   <span className="spot-pin static" aria-hidden />
                   <button className="grow spot-main" onClick={() => { sfx.select(); focusSpot.current?.(s); }} aria-label={`${s.name}: ${s.species} bird species recorded. Show on map`}>
