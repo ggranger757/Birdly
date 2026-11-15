@@ -18,7 +18,7 @@ export interface SceneDef {
 }
 
 export const SCENES: Record<string, SceneDef> = {
-  skyday: { id: 'skyday', label: "Sky meadow", level: 1, layers: 1, w: 384, h: 224, ground: 214, props: ['branchL', 'post'] },
+  skyday: { id: 'skyday', label: "Sky meadow", level: 1, layers: 1, w: 384, h: 154, ground: 146, props: ['branchL', 'post'] },
   crimson: { id: 'crimson', label: "Crimson castle", level: 9, layers: 1, w: 384, h: 216, ground: 206, props: ['branchL', 'branchR'] },
   moonkeep: { id: 'moonkeep', label: "Moonlit keep", level: 13, layers: 1, w: 384, h: 216, ground: 208, props: ['branchL', 'branchR'] },
   chapel: { id: 'chapel', label: "Ivy chapel", level: 17, layers: 1, w: 281, h: 245, ground: 230, props: ['branchL', 'post'] },

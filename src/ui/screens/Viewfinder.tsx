@@ -28,7 +28,6 @@ export function Viewfinder() {
   const [hwZoom, setHwZoom] = useState<{ min: number; max: number } | null>(null);
   const [freeze, setFreeze] = useState<string | null>(null);
   const [small, setSmall] = useState(false);
-  const [showList, setShowList] = useState(true);
   const [importErr, setImportErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -63,15 +62,36 @@ export function Viewfinder() {
   const swFilter = !hwExposure && exposure ? `brightness(${Math.pow(2, exposure / 2).toFixed(2)})` : undefined;
   const swZoom = hwZoom ? 1 : zoom;
 
+  // the square you see on screen is exactly what gets captured
+  const viewRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const frameCrop = () => {
+    const v = videoRef.current, box = viewRef.current, fr = frameRef.current;
+    if (!v || !v.videoWidth) return null;
+    const side0 = Math.min(v.videoWidth, v.videoHeight) / swZoom;
+    const centre = { x: (v.videoWidth - side0) / 2, y: (v.videoHeight - side0) / 2, s: side0 };
+    if (!box || !fr) return centre;
+    const b = box.getBoundingClientRect(), f = fr.getBoundingClientRect();
+    if (!b.width || !f.width) return centre;
+    const scale = Math.max(b.width / v.videoWidth, b.height / v.videoHeight);
+    const ox = (b.width - v.videoWidth * scale) / 2, oy = (b.height - v.videoHeight * scale) / 2;
+    const cx = b.width / 2, cy = b.height / 2;
+    const unzoom = (px: number, c: number) => c + (px - c) / swZoom;            // undo the CSS scale() zoom
+    const fx = unzoom(f.left - b.left, cx), fy = unzoom(f.top - b.top, cy), fs = f.width / swZoom;
+    const x = (fx - ox) / scale, y = (fy - oy) / scale, sz = fs / scale;
+    const sMax = Math.min(sz, v.videoWidth, v.videoHeight);
+    return { x: Math.max(0, Math.min(v.videoWidth - sMax, x)), y: Math.max(0, Math.min(v.videoHeight - sMax, y)), s: sMax };
+  };
+
   // CAM-4 distance cue: sample the frame every ~1.2s
   useEffect(() => {
     if (cam !== 'live') return;
     let n = 0;
     const iv = setInterval(async () => {
       const v = videoRef.current; if (!v || !v.videoWidth) return;
-      const side = Math.min(v.videoWidth, v.videoHeight) / swZoom;
+      const cr = frameCrop(); if (!cr) return;
       const c = canvas(128, 128); const g = c.getContext('2d', { willReadFrequently: true })!;
-      g.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, 128, 128);
+      g.drawImage(v, cr.x, cr.y, cr.s, cr.s, 0, 0, 128, 128);
       const a = await analyze(g.getImageData(0, 0, 128, 128).data, 128);
       const area = a.bbox.w * a.bbox.h;
       n = area < 0.05 && a.score.separation > 4 ? n + 1 : 0;
@@ -91,8 +111,7 @@ export function Viewfinder() {
   const shoot = async () => {
     const v = videoRef.current; if (!v || !v.videoWidth) return;
     sfx.shutter(); haptic(14);
-    const side = Math.min(v.videoWidth, v.videoHeight) / swZoom;
-    const crop = { x: (v.videoWidth - side) / 2, y: (v.videoHeight - side) / 2, s: side };
+    const crop = frameCrop()!;
     const shot = await normalize(v, v.videoWidth, v.videoHeight, crop, swFilter);
     setFreeze(shot.preview); // CAM-5: the freeze shows the actual captured image
     setTimeout(() => { setFreeze(null); nav.open({ name: 'catch', job: { mode: 'field', shot, returnTo: 'journal' } }); }, 220);
@@ -155,48 +174,43 @@ export function Viewfinder() {
     <div className="overlay" style={{ background: '#000' }}>
       <TopBar title={regionCode} onBack={nav.back} backIcon="close"
         right={<button className="icon-btn" aria-pressed={grid} aria-label="Toggle grid" onClick={() => setState((s) => ({ ...s, settings: { ...s.settings, grid: !s.settings.grid } }))}><Icon name="grid" size={20} filled={grid} /></button>} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', minHeight: 0 }}>
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', background: '#000' }} onPointerDown={tapFocus}>
-          <video ref={videoRef} playsInline muted autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover', transform: swZoom > 1 ? `scale(${swZoom})` : undefined, filter: swFilter }} />
+      <div className="cam-view" ref={viewRef} onPointerDown={tapFocus}>
+        <video ref={videoRef} playsInline muted autoPlay style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: swZoom > 1 ? `scale(${swZoom})` : undefined, filter: swFilter }} />
+        {/* the capture square: centred in the space above the controls */}
+        <div className="cam-frame" ref={frameRef} aria-hidden>
           {grid && (
             <svg viewBox="0 0 3 3" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} aria-hidden>
               <path d="M1 0V3M2 0V3M0 1H3M0 2H3" stroke="rgba(247,244,233,.55)" strokeWidth="0.008" />
             </svg>
           )}
-          {reticle && <div className="reticle locked" style={{ left: `calc(${reticle.x * 100}% - 32px)`, top: `calc(${reticle.y * 100}% - 32px)` }}><i /><i /><i /><i /></div>}
-          {freeze && <img src={freeze} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-          {freeze && <div className="flash" />}
-          {cam === 'starting' && <p className="px" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>Waking the camera…</p>}
-          {/* exposure slider: right edge, thumb-reachable */}
-          <input type="range" min={-2} max={2} step={0.5} value={exposure} onChange={(e) => setExposure(Number(e.target.value))} aria-label="Exposure"
-            onPointerDown={(e) => e.stopPropagation()}
-            style={{ position: 'absolute', right: -52, top: '50%', width: 150, transform: 'translateY(-50%) rotate(-90deg)', accentColor: 'var(--accent)' }} />
-          {small && <div className="chip" style={{ position: 'absolute', left: 8, bottom: 8 }} role="status">Small in frame — get closer if you can</div>}
+          <i className="c tl" /><i className="c tr" /><i className="c bl" /><i className="c br" />
         </div>
-      </div>
-      <div style={{ padding: '8px 16px calc(12px + var(--safe-b))', background: 'var(--ink)' }}>
-        <MerlinTip id="camera" placement="inline" />
-        <button className="btn ghost block small" onClick={() => setShowList((v) => !v)} aria-expanded={showList} style={{ justifyContent: 'flex-start', textTransform: 'none', fontFamily: 'var(--body)', letterSpacing: 0 }}>
-          <span className="px" style={{ fontSize: 11, color: 'var(--accent)' }}>Likely</span>&nbsp;{short.map((l) => l.sp.common.split(' ').pop()).join(' · ')}
-        </button>
-        {showList && (
-          <div className="hscroll mt8">
-            {short.map(({ sp, rarity }) => (
-              <div key={sp.id} className="panel flat" style={{ minWidth: 132, margin: 0, padding: 8 }}>
-                <div className="row"><Sprite species={sp} scale={2} mode="static" /><RefThumb sp={sp} size={40} /></div>
-                <div className="small" style={{ fontWeight: 600 }}>{sp.common}</div>
-                <RarityTag rarity={rarity} />
-              </div>
+        {reticle && <div className="reticle locked" style={{ left: `calc(${reticle.x * 100}% - 32px)`, top: `calc(${reticle.y * 100}% - 32px)` }}><i /><i /><i /><i /></div>}
+        {freeze && <img src={freeze} alt="" className="cam-freeze" />}
+        {freeze && <div className="flash" />}
+        {cam === 'starting' && <p className="px" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>Waking the camera…</p>}
+        <div className="cam-tip"><MerlinTip id="camera" placement="inline" /></div>
+        {/* exposure slider: right edge, thumb-reachable */}
+        <input type="range" min={-2} max={2} step={0.5} value={exposure} onChange={(e) => setExposure(Number(e.target.value))} aria-label="Exposure"
+          onPointerDown={(e) => e.stopPropagation()} className="cam-exposure" />
+        {small && <div className="chip cam-small" role="status">Small in frame — get closer if you can</div>}
+
+        {/* controls float over the bottom of the camera */}
+        <div className="cam-controls" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="cam-likely" role="list" aria-label="Likely birds right now">
+            <span className="px cam-likely-label">Likely</span>
+            {short.map(({ sp }) => (
+              <div key={sp.id} role="listitem" className="cam-chip"><RefThumb sp={sp} size={28} /><span>{sp.common}</span></div>
             ))}
           </div>
-        )}
-        <div className="row mt8" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <button className="btn ghost small" onClick={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} aria-label={`Zoom ${zoom} times`}>{zoom}×</button>
-          <button className="shutter ready" onClick={shoot} disabled={cam !== 'live'} aria-label="Shutter"><Icon name="photo" size={28} color="var(--ink)" /></button>
-          <button className="btn ghost small" onClick={() => fileRef.current?.click()} aria-label="Import a photo from today">Import</button>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <button className="btn ghost small cam-side" onClick={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} aria-label={`Zoom ${zoom} times`}>{zoom}×</button>
+            <button className="shutter ready" onClick={shoot} disabled={cam !== 'live'} aria-label="Shutter"><Icon name="photo" size={28} color="var(--ink)" /></button>
+            <button className="btn ghost small cam-side" onClick={() => fileRef.current?.click()} aria-label="Import a photo from today">Import</button>
+          </div>
+          <button className="link cam-flew" onClick={() => nav.replace({ name: 'quicklog' })}>It flew off? Log it without a photo</button>
+          {importErr && <p className="small" role="alert" style={{ color: 'var(--oriole)', margin: 0 }}>{importErr}</p>}
         </div>
-        <button className="btn ghost block small mt8" onClick={() => nav.replace({ name: 'quicklog' })}>It flew off? Log it without a photo</button>
-        {importErr && <p className="small" role="alert" style={{ color: 'var(--oriole)' }}>{importErr}</p>}
         {importInput}
       </div>
     </div>
